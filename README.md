@@ -162,6 +162,7 @@ uv run python -m compileall -q src tests tools
 - [IMA OpenAPI 1.1.9 唯一契约](docs/IMA_OPENAPI_CONTRACT_1_1_9.md)
 - [Skill distribution policy](docs/SKILL_DISTRIBUTION_POLICY.md)
 - [Skill migration matrix](docs/SKILL_MIGRATION_1_1_9.md)
+- [Implementation plans](docs/plans/OPTIMIZATION_PLAN.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Third-party provenance

@@ -1,7 +1,7 @@
 # ima-note-cli 仓库发现与优化实施计划
 
 > 整理日期：2026-07-11  
-> 参考来源：[`third_party/ima-skills/1.1.7/original`](third_party/ima-skills/1.1.7/original)  
+> 参考来源：[`third_party/ima-skills/1.1.7/original`](../../third_party/ima-skills/1.1.7/original)
 > 当前阶段：阶段 6 已完成；阶段 7 尚未实施
 
 ## 1. 执行摘要
@@ -26,7 +26,7 @@
 - 主分支：`main`，与 `origin/main` 对齐。
 - 用户提供的 1.1.7 目录已按原始 bytes、SHA-256 和 MIT-0 来源证据归档。
 - `skills/ima-note-cli` 是唯一 active skill；旧版 `ima-note` 与 1.1.2 skill 已迁移并删除。
-- [`docs/IMA_OPENAPI_CONTRACT_1_1_9.md`](docs/IMA_OPENAPI_CONTRACT_1_1_9.md) 是唯一规范 API 契约。
+- [`docs/IMA_OPENAPI_CONTRACT_1_1_9.md`](../IMA_OPENAPI_CONTRACT_1_1_9.md) 是唯一规范 API 契约。
 - Python 运行时没有第三方生产依赖，`uv.lock` 仅包含本项目。
 
 ### 2.2 测试基线

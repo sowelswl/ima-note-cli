@@ -1668,7 +1668,7 @@ uv run python -m ima_note_cli kb export --help
 
 ~~~bash
 rtk rg -n "search_note_book|list_note_folder_by_cursor|list_note_by_folder_id|docid" README.md docs skills src tests
-rtk rg -n "ima-skills-1\.1\.7 \(1\)" README.md docs skills tools tests OPTIMIZATION_PLAN.md
+rtk rg -n "ima-skills-1\.1\.7 \(1\)" README.md docs skills tools tests
 rtk rg -n "skills/ima-note\b|skills/ima-skills-1\.1\.2" README.md docs skills tools tests
 rtk rg -n "IMA_BASE_URL|check_skill_update|cos-upload\.cjs|preflight-check\.cjs" skills/ima-note-cli
 rtk rg -n "doc_id" README.md docs skills/ima-note-cli src tests
