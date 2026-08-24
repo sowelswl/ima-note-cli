@@ -39,7 +39,7 @@ CLI 跨库搜索是对单库 `search_knowledge` 的本地编排，不是新的�
 - 非 11 且含 `url_info` 时，必须有非空 HTTPS URL，headers 必须是安全字符串映射；
 - 非 11 且无 `url_info` 时，返回合法的 unavailable 元数据且不发第二个请求。
 
-初始原文 URL 只允许 `ima.qq.com`、精确的微信文章 host `mp.weixin.qq.com`，或标签边界正确的 `*.myqcloud.com` HTTPS host，并拒绝 userinfo、IP、localhost、非默认端口和控制字符。独立客户端不携带 IMA 长期凭证且拒绝跨源重定向；访问微信文章时使用固定的普通浏览器 User-Agent，以避免源站把标准库默认请求误判为异常环境。`read` 要求明确文本 MIME、最多 4 MiB 并按声明 charset 解码；`export` 以 64 KiB 流式处理、最多 200 MiB、默认不覆盖并原子替换。安全输出不包含完整签名 URL、query 或临时 header 值。
+初始原文 URL 只允许 `ima.qq.com`、IMA API 返回的精确资源 host `res-skb.ima.qq.com`、精确的微信文章 host `mp.weixin.qq.com`，或标签边界正确的 `*.myqcloud.com` HTTPS host，并拒绝 userinfo、IP、localhost、非默认端口和控制字符；不接受任意 `*.ima.qq.com`。独立客户端不携带 IMA 长期凭证且拒绝跨源重定向；访问微信文章时使用固定的普通浏览器 User-Agent，以避免源站把标准库默认请求误判为异常环境。`read` 要求明确文本 MIME、最多 4 MiB 并按声明 charset 解码；`export` 以 64 KiB 流式处理、最多 200 MiB、默认不覆盖并原子替换。安全输出不包含完整签名 URL、query 或临时 header 值。
 
 ## 用户 URL 与 SSRF 边界
 
