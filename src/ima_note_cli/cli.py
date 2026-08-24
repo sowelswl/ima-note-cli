@@ -20,7 +20,7 @@ from .commands.notes import execute as execute_note
 from .commands.knowledge import execute as execute_knowledge
 from .upload_service import UploadService
 from .url_ingest import UrlIngestService
-from .validation import validate_max_pages, validate_timeout
+from .validation import validate_max_bases, validate_max_pages, validate_timeout
 
 
 class CliArgumentParser(argparse.ArgumentParser):
@@ -56,6 +56,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(argv_list)
         if hasattr(args, "max_pages"):
             validate_max_pages(args.max_pages)
+        if getattr(args, "max_bases", None) is not None:
+            validate_max_bases(args.max_bases)
         if hasattr(args, "download_timeout"):
             validate_timeout(args.download_timeout, "--download-timeout")
         if hasattr(args, "upload_timeout"):

@@ -185,7 +185,8 @@ options:
 #### `ima kb search`
 
 ```text
-usage: ima kb search [-h] --kb-id KB_ID [--cursor CURSOR] [--all]
+usage: ima kb search [-h] (--kb-id KB_ID | --all-bases)
+                     [--max-bases MAX_BASES] [--cursor CURSOR] [--all]
                      [--max-pages MAX_PAGES] [--json]
                      query
 
@@ -194,7 +195,11 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID
+  --kb-id KB_ID         Knowledge base ID; repeat for up to 20 bases.
+  --all-bases           Search across discovered knowledge bases.
+  --max-bases MAX_BASES
+                        Maximum bases for --all-bases (default: 20; range:
+                        1-100).
   --cursor CURSOR
   --all
   --max-pages MAX_PAGES

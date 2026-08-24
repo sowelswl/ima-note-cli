@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "name": "ima-skills",
+  "version": "1.1.9",
+  "source_url": "https://app-dl.ima.qq.com/skills/ima-skills-1.1.9.zip",
+  "recorded_at": "2026-08-24",
+  "archive_sha256": "8ee88bf653d905e91cee7ad95e44589f2de78db9c601d450807a144c09e89e33",
+  "license": "NOASSERTION",
+  "license_evidence": null,
+  "manifest": "SHA256SUMS",
+  "aggregate_manifest_sha256": "3e4a675cfa6a524115c5ef8bac6bd3b259a073963731e08e2c9655800a7dfa21",
+  "role": "reference-only",
+  "active_skill": false,
+  "included_in_wheel": false
+}

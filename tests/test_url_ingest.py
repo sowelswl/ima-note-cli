@@ -21,6 +21,11 @@ class UrlIngestTests(unittest.TestCase):
         self.assertEqual(classify_response(self.info("https://site.test/a.pdf", "text/html")).route, "web")
         self.assertEqual(classify_response(self.info("https://youtube.com/watch", "text/html")).route, "unsupported")
 
+    def test_remote_html_stays_web_while_epub_is_a_file(self) -> None:
+        self.assertEqual(classify_response(self.info("https://site.test/page.html", "text/html")).route, "web")
+        epub = classify_response(self.info("https://site.test/book.epub", "application/epub+zip"))
+        self.assertEqual((epub.route, epub.file_name, epub.content_type), ("file", "book.epub", "application/epub+zip"))
+
     def test_disposition_and_octet_stream_route_to_file(self) -> None:
         result = classify_response(self.info("https://site.test/download", "application/octet-stream", "attachment; filename*=UTF-8''report.pdf"))
         self.assertEqual((result.route, result.file_name), ("file", "report.pdf"))

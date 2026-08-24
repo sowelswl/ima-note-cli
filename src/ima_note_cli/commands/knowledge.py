@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..command_result import CommandResult, CommandStatus
-from ..errors import ExitCode, ImaCliError
+from ..errors import ApiProtocolError, ExitCode, ImaCliError, InputError
 from ..knowledge_cli import kb_detail_to_dict, kb_entry_to_dict, kb_summary_to_dict, path_node_to_dict
 from ..pagination import collect_cursor_pages
 
@@ -17,7 +17,15 @@ def execute(args: Any, client: Any, *, media_service: Any = None, upload_service
     if action == "browse":
         return _cursor(args, lambda cursor: client.list_knowledge(args.kb_id, args.limit, cursor=cursor, folder_id=args.folder_id), "items", kb_entry_to_dict, {"knowledge_base_id": args.kb_id, "folder_id": args.folder_id or ""})
     if action == "search":
-        return _cursor(args, lambda cursor: client.search_knowledge(args.query, args.kb_id, cursor=cursor), "items", kb_entry_to_dict, {"query": args.query, "knowledge_base_id": args.kb_id})
+        kb_ids = args.kb_ids or []
+        if kb_ids and args.max_bases is not None:
+            raise InputError("--max-bases may only be used with --all-bases.", details={"field": "--max-bases"})
+        if (len(kb_ids) != 1) and args.cursor:
+            raise InputError("--cursor may only be used with a single --kb-id.", details={"field": "--cursor"})
+        if len(kb_ids) == 1:
+            kb_id = kb_ids[0]
+            return _cursor(args, lambda cursor: client.search_knowledge(args.query, kb_id, cursor=cursor), "items", kb_entry_to_dict, {"query": args.query, "knowledge_base_id": kb_id})
+        return _search_across_bases(args, client, kb_ids)
     if action == "show-base":
         value = client.get_knowledge_base(args.kb_id)
         payload = {"knowledge_base": kb_detail_to_dict(value) if value else None}
@@ -86,3 +94,115 @@ def _dedupe(values: list[Any], key: Any) -> list[Any]:
         if identity not in seen:
             seen.add(identity); result.append(value)
     return result
+
+
+def _search_across_bases(args: Any, client: Any, kb_ids: list[str]) -> CommandResult:
+    if kb_ids:
+        if len(kb_ids) > 20:
+            raise InputError("--kb-id may be provided at most 20 times.", details={"field": "--kb-id", "limit": 20})
+        if len(set(kb_ids)) != len(kb_ids):
+            raise InputError("--kb-id values must be unique.", details={"field": "--kb-id"})
+        details = client.get_knowledge_bases(kb_ids)
+        targets = [(kb_id, details[kb_id].name if kb_id in details else kb_id) for kb_id in kb_ids]
+        discovery = None
+        scope = "selected_bases"
+    else:
+        targets, discovery = _discover_bases(client, args.max_bases or 20)
+        scope = "all_bases"
+
+    groups: list[dict[str, Any]] = []
+    lines: list[str] = []
+    succeeded = empty = partial = failed = total_items = 0
+    for kb_id, name in targets:
+        try:
+            result = _cursor(
+                args,
+                lambda cursor, current=kb_id: client.search_knowledge(args.query, current, cursor=cursor),
+                "items",
+                kb_entry_to_dict,
+                {"query": args.query, "knowledge_base_id": kb_id},
+            )
+            items = result.payload["items"]
+            total_items += len(items)
+            group_status = result.status.value
+            group = {
+                "knowledge_base": {"knowledge_base_id": kb_id, "name": name},
+                "status": group_status,
+                "items": items,
+                "cursor": result.payload["cursor"],
+                "next_cursor": result.payload["next_cursor"],
+                "is_end": result.payload["is_end"],
+            }
+            if "pagination" in result.payload:
+                group["pagination"] = result.payload["pagination"]
+            if result.error is not None:
+                group["error"] = result.error.to_error_dict()
+            if result.status is CommandStatus.SUCCESS:
+                succeeded += 1
+            elif result.status is CommandStatus.EMPTY:
+                empty += 1
+            elif result.status is CommandStatus.PARTIAL:
+                partial += 1
+            else:
+                failed += 1
+            lines.extend((f"Knowledge base: {name}", f"Returned: {len(items)}"))
+        except ImaCliError as exc:
+            failed += 1
+            group = {
+                "knowledge_base": {"knowledge_base_id": kb_id, "name": name},
+                "status": "failed",
+                "items": [],
+                "error": exc.to_error_dict(),
+            }
+            lines.append(f"Knowledge base failed: {name}")
+        groups.append(group)
+
+    summary = {
+        "total_bases": len(targets), "succeeded": succeeded, "empty": empty,
+        "partial": partial, "failed": failed, "total_items": total_items,
+    }
+    payload: dict[str, Any] = {
+        "query": args.query, "scope": scope, "summary": summary,
+        "knowledge_bases": groups,
+    }
+    if discovery is not None:
+        payload["discovery"] = discovery
+    if failed or partial:
+        error = ImaCliError(
+            f"{failed + partial} of {len(targets)} knowledge bases failed or were incomplete.",
+            code="partial_failure", exit_code=ExitCode.PARTIAL,
+        )
+        status = CommandStatus.PARTIAL if succeeded or empty or total_items else CommandStatus.FAILED
+        return CommandResult(payload, tuple(lines), status=status, exit_code=int(ExitCode.PARTIAL), error=error)
+    status = CommandStatus.SUCCESS if total_items else CommandStatus.EMPTY
+    return CommandResult(payload, tuple(lines), status=status)
+
+
+def _discover_bases(client: Any, max_bases: int) -> tuple[list[tuple[str, str]], dict[str, Any]]:
+    cursor = ""
+    seen_cursors: set[str] = set()
+    seen_ids: set[str] = set()
+    targets: list[tuple[str, str]] = []
+    pages = 0
+    is_end = False
+    while len(targets) < max_bases and not is_end and pages < max_bases:
+        if cursor in seen_cursors:
+            raise ApiProtocolError("Knowledge base discovery cursor repeated.", code="pagination_cursor_loop")
+        seen_cursors.add(cursor)
+        page = client.search_knowledge_bases("", min(20, max_bases - len(targets)), cursor=cursor)
+        pages += 1
+        for item in page["knowledge_bases"]:
+            if item.knowledge_base_id not in seen_ids:
+                seen_ids.add(item.knowledge_base_id)
+                targets.append((item.knowledge_base_id, item.name))
+                if len(targets) == max_bases:
+                    break
+        is_end = page["is_end"]
+        next_cursor = page["next_cursor"]
+        if not is_end and not next_cursor:
+            raise ApiProtocolError("Knowledge base discovery did not provide a next cursor.", code="pagination_no_progress")
+        cursor = next_cursor
+    return targets, {
+        "max_bases": max_bases, "bases_discovered": len(targets),
+        "pages_fetched": pages, "truncated": not is_end, "next_cursor": cursor,
+    }

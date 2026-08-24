@@ -26,6 +26,34 @@ class KnowledgeUploadTests(unittest.TestCase):
         self.assertEqual(info.content_type, "text/markdown")
         self.assertEqual(info.file_name, "note.md")
 
+    def test_inspect_upload_file_supports_html_and_epub(self) -> None:
+        expected = {
+            "page.html": (20, "text/html"),
+            "book.epub": (21, "application/epub+zip"),
+        }
+        with TemporaryDirectory() as tmp_dir:
+            for name, values in expected.items():
+                with self.subTest(name=name):
+                    path = Path(tmp_dir) / name
+                    path.write_bytes(b"content")
+                    info = inspect_upload_file(str(path))
+                    self.assertEqual((info.media_type, info.content_type), values)
+
+    def test_html_and_epub_size_limits_are_enforced(self) -> None:
+        limits = {"page.html": 10 * 1024 * 1024, "book.epub": 50 * 1024 * 1024}
+        with TemporaryDirectory() as tmp_dir:
+            for name, limit in limits.items():
+                path = Path(tmp_dir) / name
+                with self.subTest(name=name, size="limit"):
+                    with path.open("wb") as stream:
+                        stream.truncate(limit)
+                    self.assertEqual(inspect_upload_file(str(path)).file_size, limit)
+                with self.subTest(name=name, size="over"):
+                    with path.open("wb") as stream:
+                        stream.truncate(limit + 1)
+                    with self.assertRaises(InputError):
+                        inspect_upload_file(str(path))
+
     def test_inspect_upload_file_rejects_video(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "clip.mp4"

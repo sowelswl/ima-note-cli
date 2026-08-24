@@ -8,7 +8,7 @@
 
 - 检查凭证配置，不显示凭证值；
 - 搜索、列出、读取、创建和追加 Notes；
-- 搜索/浏览 Knowledge base，添加笔记、网页、远程文件和本地文件；
+- 搜索/浏览单个或多个 Knowledge base，添加笔记、网页、远程文件和本地文件；
 - 安全读取或导出原始媒体；
 - 为列表/搜索提供 `--all --max-pages` 有界分页；
 - 为文件冲突提供 `--on-conflict error|rename`；
@@ -102,6 +102,8 @@ ima kb search-base "project"
 ima kb show-base --kb-id "kb_id"
 ima kb browse --kb-id "kb_id" --all --max-pages 20
 ima kb search "schedule" --kb-id "kb_id"
+ima kb search "schedule" --kb-id "kb_id_1" --kb-id "kb_id_2" --all --max-pages 20
+ima kb search "schedule" --all-bases --max-bases 20
 ima kb addable
 ima kb add-note --kb-id "kb_id" --note-id "note_id" --title "Title"
 ima kb add-url --kb-id "kb_id" --url "https://example.com/article" --download-timeout 30 --upload-timeout 60
@@ -111,6 +113,8 @@ ima kb read --media-id "media_id"
 ima kb export --media-id "media_id" --output original.bin
 ```
 
+重复 `--kb-id` 可搜索 1–20 个指定知识库；`--all-bases` 与 `--kb-id` 互斥，通过空关键词发现知识库，并由 `--max-bases`（默认 20，范围 1–100）限制扫描规模。`--cursor` 是单库游标，只能与一个 `--kb-id` 一起使用。跨库结果按知识库分组，不生成没有服务端分数依据的全局相关性排序。单库失败时保留其他结果并返回 exit code 9。
+
 所有准确参数、default、choices 与 required 状态见 parser 生成的 [CLI reference](docs/CLI_REFERENCE.md)，也可运行 `ima ... --help`。
 
 ## 安全边界
@@ -119,7 +123,7 @@ Notes 写入前验证 UTF-8，并移除 Markdown/HTML 中的本地路径、data 
 
 `add-url` 对用户 URL 实施 SSRF 防护：限制 scheme/port、拒绝 userinfo/IP/localhost/非公网 DNS、逐跳验证重定向并绑定已验证公网 IP；不发送 IMA/COS 凭证、cookie 或环境代理。HTML/微信页面使用网页导入，支持的远程文件有界下载后进入与本地文件相同的上传 gate。
 
-上传使用 64 KiB 流式读取、固定 Content-Length、文件身份前后检查和官方 COS host 校验。默认冲突策略是失败；只有显式 `--on-conflict rename` 才自动改名。
+上传使用 64 KiB 流式读取、固定 Content-Length、文件身份前后检查和官方 COS host 校验。支持本地 HTML（10 MiB）和 EPUB（50 MiB）；远程 `text/html` 仍按网页导入。默认冲突策略是失败；只有显式 `--on-conflict rename` 才自动改名。
 
 `media-info` 只输出脱敏元数据。`read` 只读最大 4 MiB 的明确文本 MIME；二进制使用 `export`。导出最大 200 MiB，默认不覆盖，`--force` 仍通过临时文件原子替换。完整签名 URL、临时 header、IMA 凭证和 COS secret 不应出现在输出中。
 
@@ -155,11 +159,11 @@ uv run python -m compileall -q src tests tools
 ## 文档
 
 - [CLI reference（generated）](docs/CLI_REFERENCE.md)
-- [IMA OpenAPI 1.1.7 唯一契约](docs/IMA_OPENAPI_CONTRACT_1_1_7.md)
+- [IMA OpenAPI 1.1.9 唯一契约](docs/IMA_OPENAPI_CONTRACT_1_1_9.md)
 - [Skill distribution policy](docs/SKILL_DISTRIBUTION_POLICY.md)
-- [Skill migration matrix](docs/SKILL_MIGRATION_1_1_7.md)
+- [Skill migration matrix](docs/SKILL_MIGRATION_1_1_9.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Third-party provenance
 
-本项目参考 `ima-skills` 1.1.7。原始 bytes、SHA-256、来源与 MIT-0 证据保存在 [third_party/ima-skills/1.1.7](third_party/ima-skills/1.1.7)。该归档是 evidence-only，不是 active skill 或运行时。MIT-0 只适用于该上游归档；项目自身仍独立声明 MIT，项目根 LICENSE 留待阶段 7 补齐。
+当前契约参考官方 `ima-skills` 1.1.9 下载包；原始 bytes、ZIP/逐文件 SHA-256 与来源保存在 [third_party/ima-skills/1.1.9](third_party/ima-skills/1.1.9)。该 ZIP 未附许可证，归档标记为 `NOASSERTION`。历史 1.1.7 快照及其 MIT-0 证据继续保存在 [third_party/ima-skills/1.1.7](third_party/ima-skills/1.1.7)。两者均为 evidence-only，不是 active skill 或运行时，也不进入 wheel。

@@ -15,3 +15,7 @@ def validate_timeout(value: int, option: str = "--timeout") -> int:
 
 def validate_max_pages(value: int) -> int:
     return require_range(value, 1, 1000, "--max-pages")
+
+
+def validate_max_bases(value: int) -> int:
+    return require_range(value, 1, 100, "--max-bases")

@@ -6,7 +6,7 @@
       "name": "ima-note-cli",
       "path": "skills/ima-note-cli",
       "skill_version": "1.0.0",
-      "contract_version": "1.1.7",
+      "contract_version": "1.1.9",
       "tested_cli_version": "0.1.0",
       "distribution": "repository-only",
       "skill_path": "skills/ima-note-cli/SKILL.md",

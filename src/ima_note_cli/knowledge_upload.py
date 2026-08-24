@@ -24,6 +24,8 @@ SIZE_LIMITS = {
     9: 30 * MB,
     13: 10 * MB,
     14: 10 * MB,
+    20: 10 * MB,
+    21: 50 * MB,
 }
 EXTENSION_MAP: dict[str, tuple[int, str]] = {
     "pdf": (1, "application/pdf"),
@@ -46,6 +48,8 @@ EXTENSION_MAP: dict[str, tuple[int, str]] = {
     "m4a": (15, "audio/x-m4a"),
     "wav": (15, "audio/wav"),
     "aac": (15, "audio/aac"),
+    "html": (20, "text/html"),
+    "epub": (21, "application/epub+zip"),
 }
 CONTENT_TYPE_ALIASES = {
     "text/x-markdown": (7, "text/x-markdown"),

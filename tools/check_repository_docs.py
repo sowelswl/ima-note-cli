@@ -34,7 +34,8 @@ def markdown_files() -> list[Path]:
     files.extend((ROOT / "docs").rglob("*.md"))
     files.extend(ROOT.glob("*PLAN*.md"))
     files.append(ROOT / "skills/ima-note-cli/SKILL.md")
-    files.extend((ROOT / "third_party/ima-skills/1.1.7/original").rglob("*.md"))
+    for version in ("1.1.7", "1.1.9"):
+        files.extend((ROOT / f"third_party/ima-skills/{version}/original").rglob("*.md"))
     return sorted({p.resolve() for p in files if p.exists()})
 
 
@@ -155,7 +156,7 @@ def check_skill() -> None:
     expected_record = {
         "name": "ima-note-cli",
         "path": "skills/ima-note-cli",
-        "contract_version": "1.1.7",
+        "contract_version": "1.1.9",
         "skill_path": "skills/ima-note-cli/SKILL.md",
         "agents_metadata_path": "skills/ima-note-cli/agents/openai.yaml",
     }
@@ -202,72 +203,89 @@ def check_skill() -> None:
             fail(f"agents/openai.yaml contains unrequested field {forbidden}")
 
 
-def check_upstream() -> None:
-    base = ROOT / "third_party/ima-skills/1.1.7"
+def check_upstream_archive(base: Path, expected: dict[str, object]) -> dict[str, object]:
     upstream = json.loads((base / "UPSTREAM.json").read_text(encoding="utf-8"))
-    expected = {"schema_version": 1, "name": "ima-skills", "version": "1.1.7", "slug": "ima-skills", "license": "MIT-0", "license_evidence": "original/skill-card.md", "manifest": "SHA256SUMS", "role": "reference-only", "active_skill": False, "included_in_wheel": False}
     for key, value in expected.items():
         if upstream.get(key) != value:
-            fail(f"UPSTREAM.json {key} must be {value!r}")
+            fail(f"{base.relative_to(ROOT)}/UPSTREAM.json {key} must be {value!r}")
     manifest_bytes = (base / "SHA256SUMS").read_bytes()
     if hashlib.sha256(manifest_bytes).hexdigest() != upstream.get("aggregate_manifest_sha256"):
-        fail("aggregate manifest SHA-256 mismatch")
+        fail(f"{base.relative_to(ROOT)} aggregate manifest SHA-256 mismatch")
     original_root = (base / "original").resolve()
     for archived in (base / "original").rglob("*"):
         attributes = getattr(archived.lstat(), "st_file_attributes", 0)
         is_junction = getattr(archived, "is_junction", lambda: False)()
         if archived.is_symlink() or is_junction or attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
-            fail(f"upstream archive contains symlink/junction/reparse point: {archived.relative_to(base / 'original')}")
+            fail(f"{base.relative_to(ROOT)} archive contains symlink/junction/reparse point: {archived.relative_to(base / 'original')}")
         try:
             archived.resolve().relative_to(original_root)
         except ValueError:
-            fail(f"upstream archive path resolves outside original/: {archived.relative_to(base / 'original')}")
+            fail(f"{base.relative_to(ROOT)} archive path resolves outside original/: {archived.relative_to(base / 'original')}")
     lines = manifest_bytes.decode("utf-8").splitlines()
     paths: list[str] = []
     for line in lines:
         match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
         if not match:
-            fail(f"invalid SHA256SUMS line: {line}")
+            fail(f"{base.relative_to(ROOT)} invalid SHA256SUMS line: {line}")
             continue
         digest, relative = match.groups()
         paths.append(relative)
         target = base / "original" / relative
         if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-            fail(f"upstream hash mismatch: {relative}")
+            fail(f"{base.relative_to(ROOT)} hash mismatch: {relative}")
     actual = sorted(p.relative_to(base / "original").as_posix() for p in (base / "original").rglob("*") if p.is_file())
     if paths != sorted(paths) or len(paths) != len(set(paths)) or sorted(paths) != actual:
-        fail("SHA256SUMS paths must be sorted, unique, and exhaustive")
+        fail(f"{base.relative_to(ROOT)} SHA256SUMS paths must be sorted, unique, and exhaustive")
+    try:
+        date.fromisoformat(str(upstream.get("recorded_at", "")))
+    except ValueError:
+        fail(f"{base.relative_to(ROOT)} recorded_at must be an ISO calendar date")
+    return upstream
+
+
+def check_upstream() -> None:
+    legacy = ROOT / "third_party/ima-skills/1.1.7"
+    legacy_expected = {"schema_version": 1, "name": "ima-skills", "version": "1.1.7", "slug": "ima-skills", "license": "MIT-0", "license_evidence": "original/skill-card.md", "manifest": "SHA256SUMS", "role": "reference-only", "active_skill": False, "included_in_wheel": False}
+    upstream = check_upstream_archive(legacy, legacy_expected)
     if (ROOT / "ima-skills-1.1.7 (1)").exists():
         fail("legacy intake directory still exists")
-    original_meta = json.loads((base / "original/_meta.json").read_text(encoding="utf-8"))
+    original_meta = json.loads((legacy / "original/_meta.json").read_text(encoding="utf-8"))
     if upstream.get("version") != original_meta.get("version") or upstream.get("slug") != original_meta.get("slug"):
         fail("UPSTREAM identity does not match original/_meta.json")
     if upstream.get("publisher", {}).get("owner_id") != original_meta.get("ownerId"):
         fail("UPSTREAM publisher owner_id does not match original/_meta.json")
     if upstream.get("published_at_ms") != original_meta.get("publishedAt") or not isinstance(upstream.get("published_at_ms"), int):
         fail("UPSTREAM published_at_ms does not match original/_meta.json")
-    try:
-        date.fromisoformat(upstream.get("recorded_at", ""))
-    except (TypeError, ValueError):
-        fail("UPSTREAM recorded_at must be an ISO calendar date")
-    card = (base / "original/skill-card.md").read_text(encoding="utf-8")
+    card = (legacy / "original/skill-card.md").read_text(encoding="utf-8")
     for evidence in (upstream.get("publisher", {}).get("name", ""), upstream.get("source_url", ""), upstream.get("license", "")):
         if not evidence or evidence not in card:
             fail(f"UPSTREAM value lacks skill-card evidence: {evidence!r}")
 
+    current = ROOT / "third_party/ima-skills/1.1.9"
+    current_expected = {"schema_version": 1, "name": "ima-skills", "version": "1.1.9", "source_url": "https://app-dl.ima.qq.com/skills/ima-skills-1.1.9.zip", "license": "NOASSERTION", "license_evidence": None, "manifest": "SHA256SUMS", "role": "reference-only", "active_skill": False, "included_in_wheel": False}
+    current_upstream = check_upstream_archive(current, current_expected)
+    if current_upstream.get("archive_sha256") != "8ee88bf653d905e91cee7ad95e44589f2de78db9c601d450807a144c09e89e33":
+        fail("1.1.9 official ZIP SHA-256 is invalid")
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    if "/third_party/ima-skills/1.1.9/** -text" not in attributes:
+        fail("1.1.9 archive must disable Git text normalization")
+    current_meta = json.loads((current / "original/meta.json").read_text(encoding="utf-8"))
+    if current_meta.get("version") != "1.1.9":
+        fail("1.1.9 archive metadata version is invalid")
+
 
 def check_active_drift() -> None:
-    active = [ROOT / "README.md", ROOT / "docs/IMA_OPENAPI_CONTRACT_1_1_7.md", ROOT / "docs/SKILL_DISTRIBUTION_POLICY.md", ROOT / "skills/ima-note-cli/SKILL.md"]
+    active = [ROOT / "README.md", ROOT / "docs/IMA_OPENAPI_CONTRACT_1_1_9.md", ROOT / "docs/SKILL_DISTRIBUTION_POLICY.md", ROOT / "skills/ima-note-cli/SKILL.md"]
     forbidden = ("search_note_book", "list_note_folder_by_cursor", "list_note_by_folder_id", "docid", "1.1.2", "ima-skills-1.1.7 (1)", "URL 探测属于后续批次")
     for path in active:
         text = path.read_text(encoding="utf-8")
         for token in forbidden:
             if token.lower() in text.lower():
                 fail(f"active surface {path.relative_to(ROOT)} contains forbidden token {token}")
-    contracts = sorted((ROOT / "docs").glob("*CONTRACT_1_1_7.md"))
-    if contracts != [ROOT / "docs/IMA_OPENAPI_CONTRACT_1_1_7.md"]:
+    contracts = sorted((ROOT / "docs").glob("IMA_OPENAPI_CONTRACT_*.md"))
+    if contracts != [ROOT / "docs/IMA_OPENAPI_CONTRACT_1_1_9.md"]:
         fail(f"expected one canonical contract, found {[p.name for p in contracts]}")
-    compatibility_surfaces = [ROOT / "README.md", ROOT / "docs/IMA_OPENAPI_CONTRACT_1_1_7.md", ROOT / "skills/ima-note-cli/SKILL.md"]
+    compatibility_surfaces = [ROOT / "README.md", ROOT / "docs/IMA_OPENAPI_CONTRACT_1_1_9.md", ROOT / "skills/ima-note-cli/SKILL.md"]
     for path in compatibility_surfaces:
         for paragraph in re.split(r"\n\s*\n", path.read_text(encoding="utf-8")):
             if "doc_id" in paragraph and not ("note_id" in paragraph and any(word in paragraph.lower() for word in ("deprecated", "compat", "canonical", "兼容", "弃用"))):
@@ -282,7 +300,7 @@ def check_generated_and_distribution() -> None:
     if 'where = ["src"]' not in pyproject or "package-data" in pyproject:
         fail("wheel package discovery must remain src-only without package data")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    required = ("repository-only", "does not install", "ima-note", "legacy", "--all", "--max-pages", "--on-conflict", "--download-timeout", "--upload-timeout", "exit code 9")
+    required = ("repository-only", "does not install", "ima-note", "legacy", "--all", "--max-pages", "--all-bases", "--max-bases", "--on-conflict", "--download-timeout", "--upload-timeout", "exit code 9")
     for phrase in required:
         if phrase.lower() not in readme.lower():
             fail(f"README missing critical distribution/workflow phrase: {phrase}")
@@ -292,7 +310,7 @@ def check_generated_and_distribution() -> None:
             fail(f"README does not cover parser leaf command: {command}")
     parser = stable_parser()
     parser_options = {option for _, current in walk_parsers(parser) for action in current._actions for option in action.option_strings}
-    key_options = {"--json", "--note-id", "--doc-id", "--all", "--max-pages", "--on-conflict", "--download-timeout", "--upload-timeout", "--force"}
+    key_options = {"--json", "--note-id", "--doc-id", "--all", "--max-pages", "--all-bases", "--max-bases", "--on-conflict", "--download-timeout", "--upload-timeout", "--force"}
     missing_parser = key_options - parser_options
     if missing_parser:
         fail(f"parser is missing required compatibility options: {sorted(missing_parser)}")

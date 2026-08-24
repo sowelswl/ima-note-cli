@@ -50,6 +50,8 @@ Use all eleven Knowledge commands:
 - `ima kb show-base --kb-id KB_ID`
 - `ima kb browse --kb-id KB_ID`
 - `ima kb search QUERY --kb-id KB_ID`
+- `ima kb search QUERY --kb-id KB_ID --kb-id OTHER_KB_ID`
+- `ima kb search QUERY --all-bases --max-bases 20`
 - `ima kb addable`
 - `ima kb add-note --kb-id KB_ID --note-id NOTE_ID --title TITLE`
 - `ima kb add-url --kb-id KB_ID --url URL`
@@ -58,7 +60,7 @@ Use all eleven Knowledge commands:
 - `ima kb read --media-id MEDIA_ID`
 - `ima kb export --media-id MEDIA_ID --output PATH`
 
-Confirm the knowledge base and content before any add/import/upload operation. Repeat `--file` for a multi-file upload. Use `--on-conflict error` by default and use `--on-conflict rename` only when automatic renaming is acceptable. Set `--download-timeout` and `--upload-timeout` when network conditions require explicit bounds.
+Confirm the knowledge base and content before any add/import/upload operation. Repeat `--file` for a multi-file upload. Local HTML files are limited to 10 MiB and EPUB files to 50 MiB. Use `--on-conflict error` by default and use `--on-conflict rename` only when automatic renaming is acceptable. Set `--download-timeout` and `--upload-timeout` when network conditions require explicit bounds.
 
 ## Preserve URL and upload safety
 
@@ -72,7 +74,7 @@ Use `media-info` for redacted metadata. Use `read` only for bounded textual orig
 
 Add `--json` for machine-readable output. Expect one JSON document containing `schema_version`, `ok`, `status`, `command`, `warnings`, and command data or a stable error. Keep stderr empty for JSON failures.
 
-Use `--all --max-pages N` for bounded multi-page list/search operations. A page cap or mixed batch can produce itemized partial output. Interpret exit code 9 as partial or itemized batch failure and inspect `results`, `summary`, and each `stage`.
+Use `--all --max-pages N` for bounded multi-page list/search operations. Repeat `--kb-id` for 1–20 selected bases, or use `--all-bases --max-bases N` for bounded discovery. Use `--cursor` only with one `--kb-id`; cursors are base-specific. Cross-base results are grouped by knowledge base and are not globally reranked. A page cap, per-base failure, or mixed batch can produce partial output. Interpret exit code 9 as partial or itemized batch failure and inspect `knowledge_bases`, `results`, `summary`, and each error or stage.
 
 Recognize the remaining exit codes: 0 success, 2 input, 3 configuration, 4 network, 5 IMA business, 6 protocol, 7 local/original-content I/O, 8 upload, 70 internal, and 130 interruption.
 

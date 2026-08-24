@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class RepositoryDocsTests(unittest.TestCase):
     def _copy_repository(self, destination: Path) -> None:
-        for name in ("README.md", "THIRD_PARTY_NOTICES.md", "pyproject.toml"):
+        for name in (".gitattributes", "README.md", "THIRD_PARTY_NOTICES.md", "pyproject.toml"):
             shutil.copy2(ROOT / name, destination / name)
         for name in ("docs", "skills", "src", "third_party", "tools"):
             shutil.copytree(ROOT / name, destination / name)
@@ -80,13 +80,14 @@ class RepositoryDocsTests(unittest.TestCase):
     def test_checker_rejects_manifest_hash_link_and_frontmatter_drift(self) -> None:
         mutations = {
             "manifest": lambda root: (root / "skills/manifest.json").write_text((root / "skills/manifest.json").read_text(encoding="utf-8").replace('"tested_cli_version": "0.1.0"', '"tested_cli_version": "9.9.9"'), encoding="utf-8"),
-            "hash": lambda root: (root / "third_party/ima-skills/1.1.7/original/meta.json").write_text("{}\n", encoding="utf-8"),
+            "hash": lambda root: (root / "third_party/ima-skills/1.1.9/original/meta.json").write_text("{}\n", encoding="utf-8"),
             "link": lambda root: (root / "README.md").write_text((root / "README.md").read_text(encoding="utf-8") + "\n[broken](missing-stage6-file.md)\n", encoding="utf-8"),
             "image_link": lambda root: (root / "README.md").write_text((root / "README.md").read_text(encoding="utf-8") + "\n![broken](missing-stage6-image.png)\n", encoding="utf-8"),
             "reference_link": lambda root: (root / "README.md").write_text((root / "README.md").read_text(encoding="utf-8") + "\n[broken-ref]: missing-stage6-ref.md\n", encoding="utf-8"),
             "frontmatter": self._empty_skill_description,
-            "published_at": lambda root: (root / "third_party/ima-skills/1.1.7/UPSTREAM.json").write_text((root / "third_party/ima-skills/1.1.7/UPSTREAM.json").read_text(encoding="utf-8").replace('"published_at_ms": 1777025159209', '"published_at_ms": 0'), encoding="utf-8"),
-            "recorded_at": lambda root: (root / "third_party/ima-skills/1.1.7/UPSTREAM.json").write_text((root / "third_party/ima-skills/1.1.7/UPSTREAM.json").read_text(encoding="utf-8").replace('"recorded_at": "2026-07-12"', '"recorded_at": "not-a-date"'), encoding="utf-8"),
+            "archive_hash": lambda root: (root / "third_party/ima-skills/1.1.9/UPSTREAM.json").write_text((root / "third_party/ima-skills/1.1.9/UPSTREAM.json").read_text(encoding="utf-8").replace('"archive_sha256": "8ee88bf653d905e91cee7ad95e44589f2de78db9c601d450807a144c09e89e33"', '"archive_sha256": "invalid"'), encoding="utf-8"),
+            "attributes": lambda root: (root / ".gitattributes").write_text("", encoding="utf-8"),
+            "recorded_at": lambda root: (root / "third_party/ima-skills/1.1.9/UPSTREAM.json").write_text((root / "third_party/ima-skills/1.1.9/UPSTREAM.json").read_text(encoding="utf-8").replace('"recorded_at": "2026-08-24"', '"recorded_at": "not-a-date"'), encoding="utf-8"),
         }
         for name, mutate in mutations.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temp:
@@ -115,7 +116,7 @@ class RepositoryDocsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self._copy_repository(root)
-            link = root / "third_party/ima-skills/1.1.7/original/escape-link"
+            link = root / "third_party/ima-skills/1.1.9/original/escape-link"
             try:
                 link.symlink_to(root / "README.md")
             except OSError as exc:

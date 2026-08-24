@@ -149,6 +149,30 @@ class FakeKnowledgeClient:
         return self._import_urls_result
 
 
+class CrossKnowledgeClient(FakeKnowledgeClient):
+    def __init__(self, *, details=None, search_pages=None, base_pages=None, failures=None) -> None:
+        super().__init__()
+        self.details = details or {}
+        self.search_pages = search_pages or {}
+        self.base_pages = base_pages or {"": {"knowledge_bases": [], "next_cursor": "", "is_end": True}}
+        self.failures = failures or {}
+        self.search_calls = []
+        self.base_calls = []
+
+    def get_knowledge_bases(self, knowledge_base_ids: list[str]):
+        return {kb_id: self.details[kb_id] for kb_id in knowledge_base_ids if kb_id in self.details}
+
+    def search_knowledge(self, query: str, knowledge_base_id: str, *, cursor: str = ""):
+        self.search_calls.append((query, knowledge_base_id, cursor))
+        if knowledge_base_id in self.failures:
+            raise self.failures[knowledge_base_id]
+        return self.search_pages[(knowledge_base_id, cursor)]
+
+    def search_knowledge_bases(self, query: str, limit: int, *, cursor: str = ""):
+        self.base_calls.append((query, limit, cursor))
+        return self.base_pages[cursor]
+
+
 class CliTests(unittest.TestCase):
     @staticmethod
     def _configured_status() -> CredentialStatus:
@@ -525,6 +549,165 @@ class CliTests(unittest.TestCase):
         parsed = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(parsed["knowledge_bases"][0]["knowledge_base_id"], "kb-1")
+
+    def test_kb_search_single_base_preserves_json_shape(self) -> None:
+        stdout = io.StringIO()
+        fake_client = FakeKnowledgeClient(
+            search_result={
+                "items": [KnowledgeEntry("file", "media-1", "计划.md", "", "排期", None, None, None)],
+                "next_cursor": "next-1",
+                "is_end": False,
+            }
+        )
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout):
+                        code = run(["kb", "search", "排期", "--kb-id", "kb-1", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["knowledge_base_id"], "kb-1")
+        self.assertEqual(parsed["items"][0]["item_id"], "media-1")
+        self.assertNotIn("scope", parsed)
+        self.assertNotIn("summary", parsed)
+
+    def test_kb_search_selected_bases_groups_deduped_results(self) -> None:
+        entry_a = KnowledgeEntry("file", "media-a", "A.md", "", "A", None, None, None)
+        entry_b = KnowledgeEntry("file", "media-b", "B.md", "", "B", None, None, None)
+        fake_client = CrossKnowledgeClient(
+            details={
+                "kb-1": KnowledgeBaseResult("kb-1", "库一", "", "", ()),
+                "kb-2": KnowledgeBaseResult("kb-2", "库二", "", "", ()),
+            },
+            search_pages={
+                ("kb-1", ""): {"items": [entry_a], "next_cursor": "c1", "is_end": False},
+                ("kb-1", "c1"): {"items": [entry_a, entry_b], "next_cursor": "", "is_end": True},
+                ("kb-2", ""): {"items": [entry_a], "next_cursor": "", "is_end": True},
+            },
+        )
+        stdout = io.StringIO()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+            "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+        ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), redirect_stdout(stdout):
+            code = run(["kb", "search", "排期", "--kb-id", "kb-1", "--kb-id", "kb-2", "--all", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["scope"], "selected_bases")
+        self.assertEqual(parsed["summary"]["total_items"], 3)
+        self.assertEqual([item["item_id"] for item in parsed["knowledge_bases"][0]["items"]], ["media-a", "media-b"])
+        self.assertEqual(parsed["knowledge_bases"][1]["knowledge_base"]["name"], "库二")
+        self.assertEqual(fake_client.search_calls, [("排期", "kb-1", ""), ("排期", "kb-1", "c1"), ("排期", "kb-2", "")])
+
+    def test_kb_search_selected_bases_reports_partial_failure(self) -> None:
+        fake_client = CrossKnowledgeClient(
+            details={
+                "kb-1": KnowledgeBaseResult("kb-1", "库一", "", "", ()),
+                "kb-2": KnowledgeBaseResult("kb-2", "库二", "", "", ()),
+            },
+            search_pages={("kb-1", ""): {"items": [], "next_cursor": "", "is_end": True}},
+            failures={"kb-2": ApiError("denied")},
+        )
+        stdout = io.StringIO()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+            "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+        ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), redirect_stdout(stdout):
+            code = run(["kb", "search", "排期", "--kb-id", "kb-1", "--kb-id", "kb-2", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 9)
+        self.assertEqual(parsed["status"], "partial")
+        self.assertEqual(parsed["summary"]["failed"], 1)
+        self.assertEqual(parsed["knowledge_bases"][1]["error"]["code"], "api_error")
+
+    def test_kb_search_selected_bases_preserves_page_cap_partial(self) -> None:
+        entry = KnowledgeEntry("file", "media-a", "A.md", "", "A", None, None, None)
+        fake_client = CrossKnowledgeClient(
+            details={
+                "kb-1": KnowledgeBaseResult("kb-1", "库一", "", "", ()),
+                "kb-2": KnowledgeBaseResult("kb-2", "库二", "", "", ()),
+            },
+            search_pages={
+                ("kb-1", ""): {"items": [entry], "next_cursor": "more", "is_end": False},
+                ("kb-2", ""): {"items": [], "next_cursor": "", "is_end": True},
+            },
+        )
+        stdout = io.StringIO()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+            "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+        ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), redirect_stdout(stdout):
+            code = run(["kb", "search", "排期", "--kb-id", "kb-1", "--kb-id", "kb-2", "--all", "--max-pages", "1", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 9)
+        self.assertEqual(parsed["summary"]["partial"], 1)
+        self.assertEqual(parsed["summary"]["empty"], 1)
+        self.assertTrue(parsed["knowledge_bases"][0]["pagination"]["truncated"])
+        self.assertEqual(parsed["knowledge_bases"][0]["items"][0]["item_id"], "media-a")
+
+    def test_kb_search_all_bases_honors_discovery_cap(self) -> None:
+        bases = {
+            "": {"knowledge_bases": [KnowledgeBaseSummary("kb-1", "库一", ""), KnowledgeBaseSummary("kb-2", "库二", "")], "next_cursor": "bases-2", "is_end": False},
+            "bases-2": {"knowledge_bases": [KnowledgeBaseSummary("kb-3", "库三", "")], "next_cursor": "bases-3", "is_end": False},
+        }
+        empty = {"items": [], "next_cursor": "", "is_end": True}
+        fake_client = CrossKnowledgeClient(
+            base_pages=bases,
+            search_pages={("kb-1", ""): empty, ("kb-2", ""): empty, ("kb-3", ""): empty},
+        )
+        stdout = io.StringIO()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+            "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+        ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), redirect_stdout(stdout):
+            code = run(["kb", "search", "排期", "--all-bases", "--max-bases", "3", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["scope"], "all_bases")
+        self.assertEqual(parsed["discovery"], {"max_bases": 3, "bases_discovered": 3, "pages_fetched": 2, "truncated": True, "next_cursor": "bases-3"})
+        self.assertEqual(fake_client.base_calls, [("", 3, ""), ("", 1, "bases-2")])
+
+    def test_kb_search_all_bases_bounds_duplicate_discovery_pages(self) -> None:
+        duplicate = KnowledgeBaseSummary("kb-1", "库一", "")
+        fake_client = CrossKnowledgeClient(
+            base_pages={
+                "": {"knowledge_bases": [duplicate], "next_cursor": "page-2", "is_end": False},
+                "page-2": {"knowledge_bases": [duplicate], "next_cursor": "page-3", "is_end": False},
+            },
+            search_pages={("kb-1", ""): {"items": [], "next_cursor": "", "is_end": True}},
+        )
+        stdout = io.StringIO()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+            "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+        ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), redirect_stdout(stdout):
+            code = run(["kb", "search", "排期", "--all-bases", "--max-bases", "2", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["discovery"]["bases_discovered"], 1)
+        self.assertEqual(parsed["discovery"]["pages_fetched"], 2)
+        self.assertTrue(parsed["discovery"]["truncated"])
+        self.assertEqual(len(fake_client.base_calls), 2)
+
+    def test_kb_search_rejects_invalid_cross_base_options(self) -> None:
+        cases = [
+            (["kb", "search", "x", "--kb-id", "kb-1", "--kb-id", "kb-1", "--json"], "invalid_input"),
+            (["kb", "search", "x", "--kb-id", "kb-1", "--max-bases", "2", "--json"], "invalid_input"),
+            (["kb", "search", "x", "--kb-id", "kb-1", "--kb-id", "kb-2", "--cursor", "base-specific", "--json"], "invalid_input"),
+            (["kb", "search", "x", "--kb-id", "kb-1", "--all-bases", "--json"], "usage_error"),
+            (["kb", "search", "x", "--all-bases", "--max-bases", "101", "--json"], "invalid_input"),
+            (["kb", "search", "x", *sum((["--kb-id", f"kb-{index}"] for index in range(21)), []), "--json"], "invalid_input"),
+        ]
+        for argv, expected_code in cases:
+            with self.subTest(argv=argv):
+                stdout = io.StringIO()
+                with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+                    "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+                ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=CrossKnowledgeClient()), redirect_stdout(stdout):
+                    code = run(argv)
+                self.assertEqual(code, 2)
+                self.assertEqual(json.loads(stdout.getvalue())["error"]["code"], expected_code)
 
     def test_kb_show_base_prints_details(self) -> None:
         stdout = io.StringIO()

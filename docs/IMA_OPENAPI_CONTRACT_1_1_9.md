@@ -1,6 +1,6 @@
-# IMA OpenAPI 1.1.7 规范契约
+# IMA OpenAPI 1.1.9 规范契约
 
-本文件是仓库唯一规范 API 契约。代码、测试和脱敏 fixtures 是可执行证据；README 与 canonical skill 只描述用户工作流；[上游归档](../third_party/ima-skills/1.1.7/original)仅作来源证据，不是当前运行规范。
+本文件是仓库唯一规范 API 契约。代码、测试和脱敏 fixtures 是可执行证据；README 与 canonical skill 只描述用户工作流；[1.1.9 上游归档](../third_party/ima-skills/1.1.9/original)仅作来源证据，不是当前运行规范。
 
 ## 共享传输与 envelope
 
@@ -27,6 +27,8 @@ IMA 请求仅发送到官方 `https://ima.qq.com`。接口使用 POST JSON，响
 
 Knowledge API 覆盖知识库搜索/详情、内容浏览/搜索、可添加知识库、添加笔记、URL 导入、文件创建与重名检查、媒体信息和知识条目添加。集合字段必须保持数组/对象类型且关键 ID 非空；布尔不接受整数替代。限制为：知识库搜索 1–20，browse/addable 1–50，批量 IDs 1–20 且唯一，URL 1–10，重名检查 1–2000。
 
+CLI 跨库搜索是对单库 `search_knowledge` 的本地编排，不是新的远程接口。重复 `--kb-id` 支持 1–20 个唯一 ID；`--all-bases` 用 `search_knowledge_base(query="")` 发现目标并以 `--max-bases` 限制 1–100 个。`--cursor` 只适用于一个 `--kb-id`，避免把库专属游标错误复用于其他库。每库独立分页、按库分组并在库内按 item ID 去重；不跨库重排。发现失败按原错误类别失败，单库失败保留其他结果并使用 exit code 9。
+
 `create_media` 必须返回 media ID 与完整、限时 COS credential；`add_knowledge` 必须返回 media ID。`import_urls` 按请求顺序关联结果，非零 `ret_code` 是单项失败。命令处理器返回结构化结果，JSON schema 1 使用 `status`、`summary`、`pagination` 与单项 `stage`；partial 和逐项 batch failure 使用退出码 9 并保留可用结果。
 
 ## Media 原文
@@ -47,7 +49,7 @@ Knowledge API 覆盖知识库搜索/详情、内容浏览/搜索、可添加知�
 
 ## 文件与 COS 上传
 
-上传 gate 顺序为：本地/远程文件预检、整批初始重名检查、冲突决策、`create_media`、COS PUT、文件身份复检、`add_knowledge`。文件名拒绝路径穿越、空名、Windows 保留名和不安全字符；支持类型、大小与 WAV 两小时边界在网络请求前验证。
+上传 gate 顺序为：本地/远程文件预检、整批初始重名检查、冲突决策、`create_media`、COS PUT、文件身份复检、`add_knowledge`。文件名拒绝路径穿越、空名、Windows 保留名和不安全字符；支持类型、大小与 WAV 两小时边界在网络请求前验证。1.1.9 新增本地 HTML（media type 20、`text/html`、10 MiB）和 EPUB（media type 21、`application/epub+zip`、50 MiB）；远程 HTML 仍走 `import_urls`。
 
 默认 `--on-conflict error`；显式 rename 使用稳定时间后缀并至多尝试 100 个候选。最终名称必须一致用于 `create_media.file_name`、`file_info.file_name` 和 `add_knowledge.title`。COS PUT 固定 Content-Length、64 KiB 读取、不重定向、不重试，只连接 API 返回且校验为官方 myqcloud host 的目标；临时凭证时间和对象 key 均严格验证。创建 media 后的失败以 stage 标记并报告可能的 orphaned media。
 
@@ -60,7 +62,8 @@ Knowledge API 覆盖知识库搜索/详情、内容浏览/搜索、可添加知�
 - [Notes fixtures](../tests/fixtures/notes/README.md)
 - [Knowledge fixtures](../tests/fixtures/knowledge/README.md)
 - [URL ingest fixtures](../tests/fixtures/url_ingest/README.md)
-- [上游结构化来源](../third_party/ima-skills/1.1.7/UPSTREAM.json)
+- [上游 1.1.9 结构化来源](../third_party/ima-skills/1.1.9/UPSTREAM.json)
+- [历史 1.1.7 结构化来源](../third_party/ima-skills/1.1.7/UPSTREAM.json)
 - [Third-party notices](../THIRD_PARTY_NOTICES.md)
 
 Fixtures 均为离线、脱敏、合成数据，不得替换为真实账户响应、ID、签名、正文或凭证。
