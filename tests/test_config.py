@@ -42,7 +42,8 @@ class LoadCredentialsTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir); config = root / "user"; config.mkdir()
             (config / "client_id").write_bytes(b"\xff")
-            with self.assertRaises(ConfigError): resolve_credentials(root, env={}, config_dir=config)
+            with self.assertRaises(ConfigError) as caught: resolve_credentials(root, env={}, config_dir=config)
+        self.assertEqual(caught.exception.code, "credentials_config_invalid")
 
     def test_inspect_credentials_reports_mixed_sources(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -110,5 +111,6 @@ class LoadCredentialsTests(unittest.TestCase):
     def test_missing_credentials_raise_config_error(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             with patch.dict(os.environ, {}, clear=True):
-                with self.assertRaises(ConfigError):
+                with self.assertRaises(ConfigError) as caught:
                     load_credentials(Path(tmp_dir), config_dir=Path(tmp_dir) / "user")
+        self.assertEqual(caught.exception.code, "credentials_missing")

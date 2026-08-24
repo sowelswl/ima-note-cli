@@ -44,3 +44,13 @@ class RemoteHttpTests(unittest.TestCase):
         with TemporaryDirectory() as directory, self.assertRaises(RemoteFetchError):
             client.download("https://public.test/file", Path(directory) / "file", max_bytes=10)
         self.assertEqual(calls, 3)
+
+    def test_http_status_distinguishes_temporary_failure(self) -> None:
+        for status, exit_code, retryable in ((503, 75, True), (404, 4, False)):
+            with self.subTest(status=status):
+                client = RemoteHttpClient(
+                    resolver=resolver, connection_factory=lambda *args, status=status: Connection(Response(status))
+                )
+                with self.assertRaises(RemoteFetchError) as caught:
+                    client.probe("https://public.test/file")
+                self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (exit_code, retryable))

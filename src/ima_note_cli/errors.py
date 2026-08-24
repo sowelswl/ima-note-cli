@@ -16,7 +16,11 @@ class ExitCode(IntEnum):
     UPLOAD = 8
     PARTIAL = 9
     INTERNAL = 70
+    TEMPORARY = 75
     INTERRUPTED = 130
+
+
+TEMPORARY_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
@@ -46,8 +50,11 @@ class ImaCliError(Exception):
     ) -> None:
         self.code = code or self.default_code
         self.message = safe_message(message)
-        self.exit_code = int(exit_code if exit_code is not None else self.default_exit_code)
         self.retryable = self.default_retryable if retryable is None else bool(retryable)
+        resolved_exit_code = exit_code if exit_code is not None else (
+            ExitCode.TEMPORARY if self.retryable else self.default_exit_code
+        )
+        self.exit_code = int(resolved_exit_code)
         self.endpoint = safe_message(endpoint, fallback="") if endpoint else None
         self.details = {key: value for key, value in (details or {}).items() if key in _DETAIL_KEYS}
         super().__init__(self.message)
@@ -92,6 +99,10 @@ class ApiTransportError(ApiError):
 class ApiBusinessError(ApiError):
     default_code = "api_business_error"
     default_exit_code = ExitCode.BUSINESS
+
+
+class AuthenticationError(ApiBusinessError):
+    default_code = "authentication_rejected"
 
 
 class ApiProtocolError(ApiError):

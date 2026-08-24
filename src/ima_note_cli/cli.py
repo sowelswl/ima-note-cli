@@ -70,11 +70,11 @@ def run(argv: Sequence[str] | None = None) -> int:
                     result = auth_result(status)
                     emit_command_result(command_name, result, as_json=False)
                     return 3
-                raise ConfigError("IMA credentials are not fully configured.")
+                raise ConfigError("IMA credentials are not fully configured.", code="credentials_missing")
             return emit_command_result(command_name, auth_result(status), as_json=as_json)
 
         if not status.is_configured:
-            raise ConfigError("IMA credentials are not fully configured.")
+            raise ConfigError("IMA credentials are not fully configured.", code="credentials_missing")
         credentials = Credentials(
             status.client_id, status.api_key,
             status.client_id_source or "unknown", status.api_key_source or "unknown",

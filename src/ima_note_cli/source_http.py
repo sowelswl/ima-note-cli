@@ -6,7 +6,7 @@ import http.client
 from typing import Any, BinaryIO, Callable
 from urllib import error, request
 
-from .errors import InputError, LocalIOError, MediaUnavailableError
+from .errors import TEMPORARY_HTTP_STATUS, InputError, LocalIOError, MediaUnavailableError
 from .knowledge_api import MediaAccessInfo
 from .security import safe_url_host, validate_media_source_url
 
@@ -96,7 +96,10 @@ class SourceHttpClient:
         except MediaUnavailableError:
             raise
         except error.HTTPError as exc:
-            raise MediaUnavailableError("The media source returned an HTTP error.", code="media_http_error", details={"http_status": exc.code}) from exc
+            raise MediaUnavailableError(
+                "The media source returned an HTTP error.", code="media_http_error",
+                retryable=exc.code in TEMPORARY_HTTP_STATUS, details={"http_status": exc.code},
+            ) from exc
         except (error.URLError, TimeoutError) as exc:
             raise MediaUnavailableError("The media source could not be reached.", code="media_transport_error", retryable=True) from exc
 

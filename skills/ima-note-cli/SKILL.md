@@ -74,9 +74,9 @@ Use `media-info` for redacted metadata. Use `read` only for bounded textual orig
 
 Add `--json` for machine-readable output. Expect one JSON document containing `schema_version`, `ok`, `status`, `command`, `warnings`, and command data or a stable error. Keep stderr empty for JSON failures.
 
-Use `--all --max-pages N` for bounded multi-page list/search operations. Repeat `--kb-id` for 1–20 selected bases, or use `--all-bases --max-bases N` for bounded discovery. Use `--cursor` only with one `--kb-id`; cursors are base-specific. Cross-base results are grouped by knowledge base and are not globally reranked. A page cap, per-base failure, or mixed batch can produce partial output. Interpret exit code 9 as partial or itemized batch failure and inspect `knowledge_bases`, `results`, `summary`, and each error or stage.
+Use `--all --max-pages N` for bounded multi-page list/search operations. Repeat `--kb-id` for 1–20 selected bases, or use `--all-bases --max-bases N` for bounded discovery. Use `--cursor` only with one `--kb-id`; cursors are base-specific. Cross-base results are grouped by knowledge base and are not globally reranked. A page cap, per-base failure, or mixed batch can produce partial output. Interpret exit code 9 as partial or itemized batch failure and inspect `knowledge_bases`, `results`, `summary`, and each error or stage. Exit code 75 means a temporary failure and may be retried with bounded backoff; in a batch, retry only failed items whose error is marked `retryable=true`.
 
-Recognize the remaining exit codes: 0 success, 2 input, 3 configuration, 4 network, 5 IMA business, 6 protocol, 7 local/original-content I/O, 8 upload, 70 internal, and 130 interruption.
+Recognize the remaining exit codes: 0 success, 2 input, 3 configuration, 4 non-temporary network, 5 IMA business/authentication, 6 protocol, 7 local/original-content I/O, 8 upload, 70 internal, 75 temporary failure, and 130 interruption.
 
 ## Maintain legacy compatibility
 

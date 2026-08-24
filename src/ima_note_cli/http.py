@@ -8,14 +8,16 @@ from urllib import error, request
 
 from . import __version__
 from .config import Credentials
-from .errors import ApiBusinessError, ApiError, ApiProtocolError, ApiTransportError
+from .errors import (
+    TEMPORARY_HTTP_STATUS, AuthenticationError, ApiBusinessError, ApiError, ApiProtocolError,
+    ApiTransportError,
+)
 from .security import redact_sensitive_text, validate_ima_base_url, validate_relative_endpoint
 
 
 MESSAGE_KEYS = ("message", "msg", "errmsg", "error_message", "error_msg")
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_ERROR_BYTES = 16 * 1024
-RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 
 class ImaApiClient:
@@ -61,13 +63,18 @@ class ImaApiClient:
                     raw_body = self._read_limited(response, MAX_JSON_BYTES, endpoint)
                 return self._parse(raw_body, endpoint)
             except error.HTTPError as exc:
-                retryable = exc.code in RETRYABLE_STATUS
+                retryable = exc.code in TEMPORARY_HTTP_STATUS
                 if retryable and attempt < max_attempts:
                     exc.close()
                     self._sleep(self._retry_delay(exc, attempt))
                     continue
                 message = self._read_error_message(exc)
                 exc.close()
+                if exc.code in {401, 403}:
+                    raise AuthenticationError(
+                        "IMA API rejected the configured credentials." + (f" {message}" if message else ""),
+                        endpoint=endpoint, details={"http_status": exc.code, "attempts": attempt},
+                    ) from exc
                 raise ApiTransportError(
                     f"IMA API request failed with HTTP {exc.code}." + (f" {message}" if message else ""),
                     endpoint=endpoint, retryable=retryable,
@@ -173,4 +180,4 @@ def maybe_int(value: Any) -> int | None:
     return value if isinstance(value, int) else None
 
 
-__all__ = ["ApiError", "ApiBusinessError", "ApiProtocolError", "ApiTransportError", "ImaApiClient"]
+__all__ = ["AuthenticationError", "ApiError", "ApiBusinessError", "ApiProtocolError", "ApiTransportError", "ImaApiClient"]

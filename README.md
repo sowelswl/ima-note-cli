@@ -143,7 +143,10 @@ Notes 写入前验证 UTF-8，并移除 Markdown/HTML 中的本地路径、data 
 | 8 | upload error |
 | 9 | partial or itemized batch failure |
 | 70 | internal error |
+| 75 | temporary failure; retry with bounded backoff |
 | 130 | interrupted |
+
+`error.retryable=true` 的单项错误使用退出码 75。批处理可能把可重试的单项错误聚合为整体退出码 9，此时只应重试失败项。完整处理规则见 [exit-code guidance](docs/guidance/EXIT_CODES.md)。
 
 ## 开发与验证
 
@@ -162,6 +165,7 @@ uv run python -m compileall -q src tests tools
 - [IMA OpenAPI 1.1.9 唯一契约](docs/IMA_OPENAPI_CONTRACT_1_1_9.md)
 - [Skill distribution policy](docs/SKILL_DISTRIBUTION_POLICY.md)
 - [Skill migration matrix](docs/SKILL_MIGRATION_1_1_9.md)
+- [Exit-code guidance](docs/guidance/EXIT_CODES.md)
 - [Implementation plans](docs/plans/OPTIMIZATION_PLAN.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 

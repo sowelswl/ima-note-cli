@@ -10,7 +10,7 @@ from ima_note_cli.errors import LocalIOError, MediaUnavailableError
 from ima_note_cli.knowledge_api import MediaAccessInfo
 from ima_note_cli.source_http import MAX_TEXT_BYTES, SourceHttpClient
 from ima_note_cli.source_http import _SafeRedirectHandler
-from urllib import request
+from urllib import error, request
 
 
 class Response(BytesIO):
@@ -86,10 +86,10 @@ class SourceHttpTests(unittest.TestCase):
             def read(self, size=-1): raise IncompleteRead(b"partial", 10)
         with self.assertRaises(MediaUnavailableError) as caught:
             SourceHttpClient(opener=lambda *_a, **_k: Broken(b"")).read_text(self.access())
-        self.assertEqual(caught.exception.exit_code, 7)
+        self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (75, True))
         with self.assertRaises(LocalIOError) as caught:
             SourceHttpClient(opener=lambda *_a, **_k: Broken(b"", "application/octet-stream")).stream_to(self.access(), BytesIO())
-        self.assertEqual(caught.exception.exit_code, 7)
+        self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (75, True))
 
     def test_destination_write_failure_is_not_network_retryable(self) -> None:
         class BrokenWriter:
@@ -98,3 +98,11 @@ class SourceHttpTests(unittest.TestCase):
             SourceHttpClient(opener=lambda *_a, **_k: Response(b"bytes", "application/octet-stream")).stream_to(self.access(), BrokenWriter())
         self.assertEqual(caught.exception.code, "media_export_failed")
         self.assertFalse(caught.exception.retryable)
+
+    def test_http_status_distinguishes_temporary_failure(self) -> None:
+        for status, exit_code, retryable in ((503, 75, True), (404, 7, False)):
+            with self.subTest(status=status):
+                http_error = error.HTTPError("https://ima.qq.com", status, "failure", Message(), BytesIO())
+                with self.assertRaises(MediaUnavailableError) as caught:
+                    SourceHttpClient(opener=lambda *_a, **_k: (_ for _ in ()).throw(http_error)).read_text(self.access())
+                self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (exit_code, retryable))

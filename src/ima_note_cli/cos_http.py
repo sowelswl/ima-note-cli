@@ -7,7 +7,7 @@ from time import time
 from typing import BinaryIO, Callable
 from urllib.parse import quote, urlsplit
 
-from .errors import KnowledgeUploadError
+from .errors import TEMPORARY_HTTP_STATUS, KnowledgeUploadError
 from .knowledge_api import CosCredential
 from .security import build_and_validate_cos_origin, validate_cos_credential_times, validate_cos_key
 from .validation import validate_timeout
@@ -71,7 +71,8 @@ class CosHttpClient:
             if not 200 <= response.status < 300:
                 response.read(MAX_ERROR_BODY)
                 raise KnowledgeUploadError(
-                    f"COS upload failed with HTTP {response.status}.", details={"http_status": response.status}
+                    f"COS upload failed with HTTP {response.status}.",
+                    retryable=response.status in TEMPORARY_HTTP_STATUS, details={"http_status": response.status},
                 )
             response.read(MAX_ERROR_BODY)
         except KnowledgeUploadError:

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from tests._bootstrap import ROOT  # noqa: F401
 from ima_note_cli.cli import run
 from ima_note_cli.config import CredentialStatus
-from ima_note_cli.errors import ApiProtocolError
+from ima_note_cli.errors import ApiProtocolError, ApiTransportError
 from ima_note_cli.knowledge_api import MediaInfo
 from ima_note_cli.knowledge_cli import validate_urls
 from ima_note_cli.errors import InputError
@@ -46,6 +46,13 @@ class CliBatchBTests(unittest.TestCase):
         self.assertEqual(code, 2); self.assertFalse(payload["ok"]); self.assertEqual(stderr, "")
         self.assertEqual(payload["command"], "kb.media-info")
 
+    def test_missing_credentials_use_stable_error_code(self) -> None:
+        missing = CredentialStatus("", "", None, None)
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=missing):
+            code, stdout, stderr = self.invoke(["auth", "--json"])
+        payload = json.loads(stdout)
+        self.assertEqual((code, stderr, payload["error"]["code"]), (3, "", "credentials_missing"))
+
     def test_media_info_json_is_safe_envelope(self) -> None:
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self.configured()), patch("ima_note_cli.cli.KnowledgeBaseApiClient", FakeKnowledge):
             code, stdout, stderr = self.invoke(["kb", "media-info", "--media-id", "media_test", "--json"])
@@ -60,6 +67,14 @@ class CliBatchBTests(unittest.TestCase):
             code, stdout, stderr = self.invoke(["kb", "media-info", "--media-id", "media_test", "--json"])
         payload = json.loads(stdout)
         self.assertEqual(code, 6); self.assertEqual(stderr, ""); self.assertFalse(payload["ok"])
+
+    def test_retryable_json_error_uses_temporary_exit_code(self) -> None:
+        class FailingKnowledge(FakeKnowledge):
+            def get_media_info(self, media_id): raise ApiTransportError("try later", endpoint="get_media_info")
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self.configured()), patch("ima_note_cli.cli.KnowledgeBaseApiClient", FailingKnowledge):
+            code, stdout, stderr = self.invoke(["kb", "media-info", "--media-id", "media_test", "--json"])
+        payload = json.loads(stdout)
+        self.assertEqual((code, stderr, payload["error"]["exit_code"], payload["error"]["retryable"]), (75, "", 75, True))
 
     def test_read_and_export_note_media(self) -> None:
         patches = (patch("ima_note_cli.cli.inspect_credentials", return_value=self.configured()),

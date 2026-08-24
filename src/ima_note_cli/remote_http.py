@@ -9,7 +9,7 @@ import ssl
 from typing import BinaryIO, Callable, Mapping
 from urllib.parse import urljoin
 
-from .errors import InputError, LocalIOError, RemoteFetchError
+from .errors import TEMPORARY_HTTP_STATUS, InputError, LocalIOError, RemoteFetchError
 from .security import PublicUrlTarget, safe_url, validate_public_url
 from .validation import validate_timeout
 
@@ -181,7 +181,10 @@ class RemoteHttpClient:
                 status = response.status
                 response.close()
                 connection.close()
-                raise RemoteFetchError(f"Remote URL returned HTTP {status}.", details={"http_status": status})
+                raise RemoteFetchError(
+                    f"Remote URL returned HTTP {status}.", retryable=status in TEMPORARY_HTTP_STATUS,
+                    details={"http_status": status},
+                )
             info = RemoteResponseInfo(safe_url(url), target.url, response.status, normalized_headers, method)
             return response, info, connection
         raise AssertionError("unreachable")

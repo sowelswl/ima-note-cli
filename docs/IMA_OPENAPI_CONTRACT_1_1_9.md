@@ -55,7 +55,7 @@ CLI 跨库搜索是对单库 `search_knowledge` 的本地编排，不是新的�
 
 ## 分页、JSON 与退出语义
 
-单页是默认行为。支持的 list/search 命令用 `--all --max-pages N` 做有界 cursor/offset 分页；重复 cursor 或页数上限产生 partial，而不是无限循环。真实 `search_knowledge` 在单页响应中可能同时省略 `next_cursor` 与 `is_end`，此时按已完成单页处理；若只提供其中一个字段，仍视为协议错误。JSON 成功和失败均为单个 stdout 文档，非 ASCII 字符使用标准 JSON Unicode 转义以消除终端编码依赖，解析后内容不变；失败时 stderr 为空。退出码为：0 成功，2 输入，3 配置，4 网络，5 业务，6 协议，7 原文/本地 I/O，8 上传，9 partial/itemized failure，70 内部错误，130 中断。
+单页是默认行为。支持的 list/search 命令用 `--all --max-pages N` 做有界 cursor/offset 分页；重复 cursor 或页数上限产生 partial，而不是无限循环。真实 `search_knowledge` 在单页响应中可能同时省略 `next_cursor` 与 `is_end`，此时按已完成单页处理；若只提供其中一个字段，仍视为协议错误。JSON 成功和失败均为单个 stdout 文档，非 ASCII 字符使用标准 JSON Unicode 转义以消除终端编码依赖，解析后内容不变；失败时 stderr 为空。退出码为：0 成功，2 输入，3 配置，4 非临时网络，5 业务/认证，6 协议，7 原文/本地 I/O，8 上传，9 partial/itemized failure，70 内部错误，75 临时故障，130 中断。`retryable=true` 的单项错误使用 75；批处理可将其聚合为整体退出码 9。
 
 ## Fixtures 与来源
 

@@ -9,7 +9,7 @@ from urllib import error
 
 from tests._bootstrap import ROOT  # noqa: F401
 from ima_note_cli.config import Credentials
-from ima_note_cli.errors import ApiBusinessError, ApiProtocolError, ApiTransportError, InputError
+from ima_note_cli.errors import AuthenticationError, ApiBusinessError, ApiProtocolError, ApiTransportError, InputError
 from ima_note_cli.http import ImaApiClient, MAX_JSON_BYTES
 
 
@@ -48,8 +48,17 @@ class HttpBatchBTests(unittest.TestCase):
         def timeout(*_args, **_kwargs):
             nonlocal calls; calls += 1; raise TimeoutError()
         client = ImaApiClient(self.credentials(), base_url="https://ima.qq.com/openapi/wiki/v1", opener=timeout, sleep=lambda _: None)
-        with self.assertRaises(ApiTransportError): client.post_write_json("add_knowledge", {})
+        with self.assertRaises(ApiTransportError) as caught: client.post_write_json("add_knowledge", {})
         self.assertEqual(calls, 1)
+        self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (75, True))
+        unavailable = error.HTTPError("https://ima.qq.com", 503, "unavailable", Message(), BytesIO(b"{}"))
+        client = ImaApiClient(
+            self.credentials(), base_url="https://ima.qq.com/openapi/wiki/v1",
+            opener=lambda *_a, **_k: (_ for _ in ()).throw(unavailable),
+        )
+        with self.assertRaises(ApiTransportError) as caught:
+            client.post_write_json("add_knowledge", {})
+        self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (75, True))
 
     def test_success_response_size_is_bounded(self) -> None:
         client = ImaApiClient(self.credentials(), base_url="https://ima.qq.com/openapi/wiki/v1", opener=lambda *_a, **_k: Response(b"", MAX_JSON_BYTES + 1))
@@ -74,8 +83,19 @@ class HttpBatchBTests(unittest.TestCase):
         body = RecordingBody(b'{"msg":"bad"}')
         http_error = error.HTTPError("https://ima.qq.com", 400, "bad", Message(), body)
         client = ImaApiClient(self.credentials(), base_url="https://ima.qq.com/openapi/wiki/v1", opener=lambda *_a, **_k: (_ for _ in ()).throw(http_error))
-        with self.assertRaises(ApiTransportError): client.post_read_json("get_media_info", {})
+        with self.assertRaises(ApiTransportError) as caught: client.post_read_json("get_media_info", {})
         self.assertEqual(body.requested, 16 * 1024)
+        self.assertEqual((caught.exception.exit_code, caught.exception.retryable), (4, False))
+
+    def test_http_authentication_rejection_is_classified(self) -> None:
+        http_error = error.HTTPError("https://ima.qq.com", 401, "unauthorized", Message(), BytesIO(b'{}'))
+        client = ImaApiClient(
+            self.credentials(), base_url="https://ima.qq.com/openapi/wiki/v1",
+            opener=lambda *_a, **_k: (_ for _ in ()).throw(http_error),
+        )
+        with self.assertRaises(AuthenticationError) as caught:
+            client.post_read_json("get_media_info", {})
+        self.assertEqual((caught.exception.code, caught.exception.exit_code), ("authentication_rejected", 5))
 
     def test_interrupted_response_retries_reads_only(self) -> None:
         class BrokenResponse(Response):

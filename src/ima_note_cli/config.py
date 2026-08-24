@@ -47,7 +47,8 @@ class CredentialResolution:
         if not status.api_key:
             missing.append("IMA_OPENAPI_APIKEY")
         raise ConfigError(
-            "Missing IMA credentials: " + ", ".join(missing) + ". Configure environment, .env, or ~/.config/ima files."
+            "Missing IMA credentials: " + ", ".join(missing) + ". Configure environment, .env, or ~/.config/ima files.",
+            code="credentials_missing",
         )
 
 
@@ -56,12 +57,12 @@ def _read_text(path: Path, *, optional: bool) -> str:
         if optional and not path.exists():
             return ""
         if not path.is_file():
-            raise ConfigError("A credential configuration path is not a regular file.")
+            raise ConfigError("A credential configuration path is not a regular file.", code="credentials_config_invalid")
         return path.read_text(encoding="utf-8")
     except ConfigError:
         raise
     except (OSError, UnicodeError) as exc:
-        raise ConfigError("A credential configuration file could not be read as UTF-8.") from exc
+        raise ConfigError("A credential configuration file could not be read as UTF-8.", code="credentials_config_invalid") from exc
 
 
 def parse_dotenv(dotenv_path: Path) -> dict[str, str]:
