@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from .errors import InputError
 from .knowledge_api import KnowledgeBaseResult, KnowledgeBaseSummary, KnowledgeEntry, KnowledgePathNode
+from .security import safe_url
 
 
 def _json(parser: argparse.ArgumentParser) -> None: parser.add_argument("--json", action="store_true", dest="as_json")
@@ -50,11 +51,11 @@ def handle_kb_command(args: argparse.Namespace, client: Any, media_service: Any 
 
 
 def kb_summary_to_dict(item: KnowledgeBaseSummary) -> dict[str, object]:
-    return {"knowledge_base_id": item.knowledge_base_id, "name": item.name, "cover_url": item.cover_url}
+    return {"knowledge_base_id": item.knowledge_base_id, "name": item.name, "cover_url": safe_url(item.cover_url) if item.cover_url else ""}
 
 
 def kb_detail_to_dict(item: KnowledgeBaseResult) -> dict[str, object]:
-    return {"knowledge_base_id": item.knowledge_base_id, "name": item.name, "cover_url": item.cover_url, "description": item.description, "recommended_questions": list(item.recommended_questions)}
+    return {"knowledge_base_id": item.knowledge_base_id, "name": item.name, "cover_url": safe_url(item.cover_url) if item.cover_url else "", "description": item.description, "recommended_questions": list(item.recommended_questions)}
 
 
 def kb_entry_to_dict(item: KnowledgeEntry) -> dict[str, object]:

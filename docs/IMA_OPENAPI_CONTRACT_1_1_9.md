@@ -27,7 +27,7 @@ IMA 请求仅发送到官方 `https://ima.qq.com`。接口使用 POST JSON，响
 
 Knowledge API 覆盖知识库搜索/详情、内容浏览/搜索、可添加知识库、添加笔记、URL 导入、文件创建与重名检查、媒体信息和知识条目添加。集合字段必须保持数组/对象类型且关键 ID 非空；布尔不接受整数替代。限制为：知识库搜索 1–20，browse/addable 1–50，批量 IDs 1–20 且唯一，URL 1–10，重名检查 1–2000。
 
-CLI 跨库搜索是对单库 `search_knowledge` 的本地编排，不是新的远程接口。重复 `--kb-id` 支持 1–20 个唯一 ID；`--all-bases` 用 `search_knowledge_base(query="")` 发现目标并以 `--max-bases` 限制 1–100 个。`--cursor` 只适用于一个 `--kb-id`，避免把库专属游标错误复用于其他库。每库独立分页、按库分组并在库内按 item ID 去重；不跨库重排。发现失败按原错误类别失败，单库失败保留其他结果并使用 exit code 9。
+CLI 跨库搜索是对单库 `search_knowledge` 的本地编排，不是新的远程接口。重复 `--kb-id` 支持 1–20 个唯一 ID；`--all-bases` 用 `search_knowledge_base(query="")` 发现目标并以 `--max-bases` 限制 1–100 个。`--cursor` 只适用于一个 `--kb-id`，避免把库专属游标错误复用于其他库。每库独立分页、按库分组并在库内按 item ID 去重；不跨库重排。发现失败按原错误类别失败，单库失败保留其他结果并使用 exit code 9。所有知识库封面 URL 在 CLI 输出边界移除 query 和 fragment，避免泄露临时签名。
 
 `create_media` 必须返回 media ID 与完整、限时 COS credential；`add_knowledge` 必须返回 media ID。`import_urls` 按请求顺序关联结果，非零 `ret_code` 是单项失败。命令处理器返回结构化结果，JSON schema 1 使用 `status`、`summary`、`pagination` 与单项 `stage`；partial 和逐项 batch failure 使用退出码 9 并保留可用结果。
 

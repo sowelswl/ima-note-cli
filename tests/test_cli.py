@@ -534,7 +534,7 @@ class CliTests(unittest.TestCase):
         stdout = io.StringIO()
         fake_client = FakeKnowledgeClient(
             search_bases_result={
-                "knowledge_bases": [KnowledgeBaseSummary("kb-1", "产品文档库", "https://example.com/cover.png")],
+                "knowledge_bases": [KnowledgeBaseSummary("kb-1", "产品文档库", "https://example.com/cover.png?q-signature=SECRET#fragment")],
                 "next_cursor": "",
                 "is_end": True,
             }
@@ -549,6 +549,8 @@ class CliTests(unittest.TestCase):
         parsed = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(parsed["knowledge_bases"][0]["knowledge_base_id"], "kb-1")
+        self.assertEqual(parsed["knowledge_bases"][0]["cover_url"], "https://example.com/cover.png")
+        self.assertNotIn("SECRET", stdout.getvalue())
 
     def test_kb_search_single_base_preserves_json_shape(self) -> None:
         stdout = io.StringIO()
@@ -715,7 +717,7 @@ class CliTests(unittest.TestCase):
             detail_result=KnowledgeBaseResult(
                 knowledge_base_id="kb-1",
                 name="产品文档库",
-                cover_url="",
+                cover_url="https://example.com/cover.png?q-signature=SECRET#fragment",
                 description="产品资料",
                 recommended_questions=("最新版本是什么？",),
             )
@@ -731,6 +733,17 @@ class CliTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("产品文档库", output)
         self.assertIn("产品资料", output)
+        self.assertNotIn("SECRET", output)
+
+        json_stdout = io.StringIO()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()), patch(
+            "ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()
+        ), patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), redirect_stdout(json_stdout):
+            json_code = run(["kb", "show-base", "--kb-id", "kb-1", "--json"])
+        payload = json.loads(json_stdout.getvalue())
+        self.assertEqual(json_code, 0)
+        self.assertEqual(payload["knowledge_base"]["cover_url"], "https://example.com/cover.png")
+        self.assertNotIn("SECRET", json_stdout.getvalue())
 
     def test_kb_browse_json_output(self) -> None:
         stdout = io.StringIO()

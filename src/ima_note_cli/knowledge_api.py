@@ -22,14 +22,14 @@ BASE_URL = "https://ima.qq.com/openapi/wiki/v1"
 class KnowledgeBaseSummary:
     knowledge_base_id: str
     name: str
-    cover_url: str
+    cover_url: str = field(repr=False)
 
 
 @dataclass(frozen=True)
 class KnowledgeBaseResult:
     knowledge_base_id: str
     name: str
-    cover_url: str
+    cover_url: str = field(repr=False)
     description: str
     recommended_questions: tuple[str, ...]
 

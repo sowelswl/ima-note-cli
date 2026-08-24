@@ -125,7 +125,7 @@ Notes 写入前验证 UTF-8，并移除 Markdown/HTML 中的本地路径、data 
 
 上传使用 64 KiB 流式读取、固定 Content-Length、文件身份前后检查和官方 COS host 校验。支持本地 HTML（10 MiB）和 EPUB（50 MiB）；远程 `text/html` 仍按网页导入。默认冲突策略是失败；只有显式 `--on-conflict rename` 才自动改名。
 
-`media-info` 只输出脱敏元数据。`read` 只读最大 4 MiB 的明确文本 MIME；二进制使用 `export`。导出最大 200 MiB，默认不覆盖，`--force` 仍通过临时文件原子替换。完整签名 URL、临时 header、IMA 凭证和 COS secret 不应出现在输出中。
+`media-info` 只输出脱敏元数据，知识库封面 URL 也会移除 query 和 fragment。`read` 只读最大 4 MiB 的明确文本 MIME；二进制使用 `export`。导出最大 200 MiB，默认不覆盖，`--force` 仍通过临时文件原子替换。完整签名 URL、临时 header、IMA 凭证和 COS secret 不应出现在输出中。
 
 ## JSON 与退出码
 

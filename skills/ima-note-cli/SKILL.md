@@ -66,7 +66,7 @@ Confirm the knowledge base and content before any add/import/upload operation. R
 
 Let `ima kb add-url` classify supported public web pages and remote files. Do not bypass its SSRF, redirect, DNS, scheme, port, or size checks. Unsupported video hosts fail before network access. Remote supported files are downloaded with bounded streaming and uploaded through the same guarded workflow as local files.
 
-Do not recommend direct raw API calls, archived Node/CJS scripts, arbitrary service base URLs, or self-updating skill code. Send long-lived IMA credentials only through the CLI's official-host client. Treat signed COS URLs and temporary headers as secrets.
+Do not recommend direct raw API calls, archived Node/CJS scripts, arbitrary service base URLs, or self-updating skill code. Send long-lived IMA credentials only through the CLI's official-host client. Treat signed COS URLs, signed knowledge-base cover queries, and temporary headers as secrets.
 
 Use `media-info` for redacted metadata. Use `read` only for bounded textual original content. Use `export` for binary content; it refuses overwrite unless `--force` is explicit and writes atomically.
 
