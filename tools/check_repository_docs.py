@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
@@ -292,6 +293,27 @@ def check_active_drift() -> None:
                 fail(f"{path.relative_to(ROOT)} describes doc_id without canonical compatibility context")
 
 
+def check_agent_help() -> None:
+    parser = stable_parser()
+    for path, current in walk_parsers(parser):
+        command = "ima" + (" " + " ".join(path) if path else "")
+        if not current.description:
+            fail(f"{command} help is missing a description")
+        if not current.epilog:
+            fail(f"{command} help is missing an automation footer")
+        has_children = any(isinstance(action, argparse._SubParsersAction) for action in current._actions)
+        if not path or has_children:
+            continue
+        if not current.epilog or "Example:" not in current.epilog:
+            fail(f"{command} help is missing a copyable example")
+        for action in current._actions:
+            if action.dest == "help":
+                continue
+            if not isinstance(action.help, str) or not action.help.strip() or action.help == argparse.SUPPRESS:
+                label = "/".join(action.option_strings) or action.dest
+                fail(f"{command} argument {label} is missing help text")
+
+
 def check_generated_and_distribution() -> None:
     reference = ROOT / "docs/CLI_REFERENCE.md"
     if not reference.exists() or reference.read_text(encoding="utf-8") != render():
@@ -324,6 +346,7 @@ def main() -> int:
     check_skill()
     check_upstream()
     check_active_drift()
+    check_agent_help()
     check_generated_and_distribution()
     check_links()
     if ERRORS:

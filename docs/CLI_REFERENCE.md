@@ -21,6 +21,16 @@ positional arguments:
 
 options:
   -h, --help      show this help message and exit
+
+Start here:
+  ima auth
+  ima note --help
+  ima kb --help
+
+Credentials are read from IMA_OPENAPI_CLIENTID and IMA_OPENAPI_APIKEY, then
+project .env or user config. Use --json on leaf commands for one
+machine-readable stdout document. Exit 9 means partial/itemized failure; exit
+75 means a temporary failure eligible for bounded backoff.
 ```
 
 ### `ima auth`
@@ -28,9 +38,19 @@ options:
 ```text
 usage: ima auth [-h] [--json]
 
+Report whether both IMA credentials are configured and where each value was
+found, without printing credential values.
+
 options:
   -h, --help  show this help message and exit
-  --json      Print structured JSON.
+  --json      Print one structured JSON document to stdout.
+
+Example:
+  ima auth --json
+
+Credential priority: environment, project .env, then user config. Missing
+credentials exit 3. JSON writes one stdout document and keeps stderr empty on
+failure.
 ```
 
 ### `ima kb`
@@ -39,6 +59,9 @@ options:
 usage: ima kb [-h]
               {search-base,show-base,browse,search,addable,add-note,add-url,add-file,media-info,read,export}
               ...
+
+Discover knowledge bases, search content, import material, and read original
+media.
 
 positional arguments:
   {search-base,show-base,browse,search,addable,add-note,add-url,add-file,media-info,read,export}
@@ -51,11 +74,15 @@ positional arguments:
     add-url             Import web pages or supported remote files.
     add-file            Upload supported local files.
     media-info          Inspect original media.
-    read                Read original media.
+    read                Read original text media.
     export              Export original media.
 
 options:
   -h, --help            show this help message and exit
+
+Workflow: search-base or addable -> knowledge_base_id; browse or search ->
+media_id; media-info -> read for text or export for binary content. Run ima kb
+<command> --help before remote writes.
 ```
 
 #### `ima kb add-file`
@@ -66,15 +93,37 @@ usage: ima kb add-file [-h] --kb-id KB_ID --file FILES [--folder-id FOLDER_ID]
                        [--on-conflict {error,rename}]
                        [--upload-timeout UPLOAD_TIMEOUT] [--json]
 
+Upload 1-2000 supported local files to one knowledge base.
+
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID
-  --file FILES
+  --kb-id KB_ID         Destination knowledge-base identifier from addable.
+  --file FILES          Local file path; repeat 1-2000 times.
   --folder-id FOLDER_ID
+                        Optional destination folder inside the knowledge base.
   --content-type CONTENT_TYPE
+                        MIME type override for one file only; cannot be used
+                        with repeated --file.
   --on-conflict {error,rename}
+                        File-name policy (default: error; rename chooses a
+                        unique name).
   --upload-timeout UPLOAD_TIMEOUT
-  --json
+                        COS upload timeout in seconds (default: 300; range:
+                        1-3600).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb add-file --kb-id "kb_test" --file ".\report.pdf" --json
+
+Remote write: confirm the knowledge base and content before running this
+command.
+
+Repeat --file for a batch. Supported: PDF, Office, CSV, Markdown, images,
+text, XMind, MP3/M4A/WAV/AAC, HTML, and EPUB; video is unsupported. Batch
+failures exit 9; retry only failed items marked retryable.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb add-note`
@@ -84,14 +133,28 @@ usage: ima kb add-note [-h] --kb-id KB_ID
                        (--note-id NOTE_ID | --doc-id DEPRECATED_DOC_ID)
                        [--title TITLE] [--folder-id FOLDER_ID] [--json]
 
+Add an existing IMA Note to one knowledge base.
+
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID
-  --note-id NOTE_ID
+  --kb-id KB_ID         Destination knowledge-base identifier from addable.
+  --note-id NOTE_ID     Canonical Note identifier from note search or list.
   --doc-id DEPRECATED_DOC_ID
-  --title TITLE
+                        Deprecated alias for --note-id; retained for
+                        compatibility.
+  --title TITLE         Optional title stored for this knowledge-base item.
   --folder-id FOLDER_ID
-  --json
+                        Optional destination folder inside the knowledge base.
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb add-note --kb-id "kb_test" --note-id "note_test" --json
+
+Remote write: confirm the knowledge base and content before running this
+command.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb add-url`
@@ -102,15 +165,38 @@ usage: ima kb add-url [-h] --kb-id KB_ID --url URLS [--folder-id FOLDER_ID]
                       [--download-timeout DOWNLOAD_TIMEOUT]
                       [--upload-timeout UPLOAD_TIMEOUT] [--json]
 
+Import 1-10 public HTTP(S) URLs; web pages use URL import and supported files
+use bounded download plus upload.
+
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID
-  --url URLS
+  --kb-id KB_ID         Destination knowledge-base identifier from addable.
+  --url URLS            Public HTTP(S) URL; repeat 1-10 times.
   --folder-id FOLDER_ID
+                        Optional destination folder inside the knowledge base.
   --on-conflict {error,rename}
+                        Downloaded-file name policy (default: error; rename
+                        chooses a unique name).
   --download-timeout DOWNLOAD_TIMEOUT
+                        Per-request remote download timeout in seconds
+                        (default: 300; range: 1-3600).
   --upload-timeout UPLOAD_TIMEOUT
-  --json
+                        COS upload timeout in seconds (default: 300; range:
+                        1-3600).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb add-url --kb-id "kb_test" --url "https://example.com/article" --json
+
+Remote write: confirm the knowledge base and content before running this
+command.
+
+Repeat --url for a batch. Batch failures exit 9; inspect results and retry
+only failed items marked retryable. Videos and private/local network URLs are
+rejected.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb addable`
@@ -119,13 +205,26 @@ options:
 usage: ima kb addable [-h] [--cursor CURSOR] [--limit LIMIT] [--all]
                       [--max-pages MAX_PAGES] [--json]
 
+List knowledge bases that the current credentials may target for imports or
+uploads.
+
 options:
   -h, --help            show this help message and exit
-  --cursor CURSOR
-  --limit LIMIT
-  --all
+  --cursor CURSOR       Opaque starting cursor from a previous response.
+  --limit LIMIT         Bases per page (default: 20; range: 1-50).
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb addable --all --max-pages 5 --json
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb browse`
@@ -135,15 +234,29 @@ usage: ima kb browse [-h] --kb-id KB_ID [--folder-id FOLDER_ID]
                      [--cursor CURSOR] [--limit LIMIT] [--all]
                      [--max-pages MAX_PAGES] [--json]
 
+Browse folders and knowledge items in one base; item results provide media_id
+values.
+
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID
+  --kb-id KB_ID         Knowledge-base identifier from search-base or addable.
   --folder-id FOLDER_ID
-  --cursor CURSOR
-  --limit LIMIT
-  --all
+                        Optional folder to browse; omit for the base root.
+  --cursor CURSOR       Opaque starting cursor from a previous response.
+  --limit LIMIT         Items per page (default: 20; range: 1-50).
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb browse --kb-id "kb_test" --all --max-pages 5 --json
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb export`
@@ -152,12 +265,24 @@ options:
 usage: ima kb export [-h] --media-id MEDIA_ID --output OUTPUT [--force]
                      [--json]
 
+Export up to 200 MiB of original media to a local file using atomic
+replacement.
+
 options:
   -h, --help           show this help message and exit
-  --media-id MEDIA_ID
-  --output OUTPUT
-  --force
-  --json
+  --media-id MEDIA_ID  Media identifier returned by kb browse or search.
+  --output OUTPUT      Local output file; its parent directory must already
+                       exist.
+  --force              Atomically replace an existing regular output file.
+  --json               Print one structured JSON document to stdout; JSON
+                       failures keep stderr empty.
+
+Example:
+  ima kb export --media-id "media_test" --output ".\original.bin" --json
+
+The destination is not overwritten unless --force is supplied.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb media-info`
@@ -165,10 +290,21 @@ options:
 ```text
 usage: ima kb media-info [-h] --media-id MEDIA_ID [--json]
 
+Inspect redacted metadata and source availability for a media_id returned by
+browse or search.
+
 options:
   -h, --help           show this help message and exit
-  --media-id MEDIA_ID
-  --json
+  --media-id MEDIA_ID  Media identifier returned by kb browse or search.
+  --json               Print one structured JSON document to stdout; JSON
+                       failures keep stderr empty.
+
+Example:
+  ima kb media-info --media-id "media_test" --json
+
+Signed URLs and temporary headers are never printed.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb read`
@@ -176,10 +312,21 @@ options:
 ```text
 usage: ima kb read [-h] --media-id MEDIA_ID [--json]
 
+Read up to 4 MiB of textual original content; use ima kb export for binary
+media.
+
 options:
   -h, --help           show this help message and exit
-  --media-id MEDIA_ID
-  --json
+  --media-id MEDIA_ID  Media identifier returned by kb browse or search.
+  --json               Print one structured JSON document to stdout; JSON
+                       failures keep stderr empty.
+
+Example:
+  ima kb read --media-id "media_test" --json
+
+This command is read-only and does not print signed source credentials.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb search`
@@ -190,8 +337,12 @@ usage: ima kb search [-h] (--kb-id KB_ID | --all-bases)
                      [--max-pages MAX_PAGES] [--json]
                      query
 
+Search one or more knowledge bases and return grouped items with media_id
+values.
+
 positional arguments:
-  query
+  query                 Content query sent independently to each selected
+                        knowledge base.
 
 options:
   -h, --help            show this help message and exit
@@ -200,10 +351,25 @@ options:
   --max-bases MAX_BASES
                         Maximum bases for --all-bases (default: 20; range:
                         1-100).
-  --cursor CURSOR
-  --all
+  --cursor CURSOR       Base-specific cursor; valid only with exactly one
+                        --kb-id.
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb search "deployment" --kb-id "kb_test" --all --max-pages 5 --json
+
+Repeat --kb-id for 1-20 selected bases, or use --all-bases. Cross-base results
+stay grouped by base and are not globally reranked. A failed or incomplete
+base preserves other results and exits 9.
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb search-base`
@@ -213,16 +379,30 @@ usage: ima kb search-base [-h] [--cursor CURSOR] [--limit LIMIT] [--all]
                           [--max-pages MAX_PAGES] [--json]
                           query
 
+Search knowledge-base metadata and return knowledge_base_id values for other
+KB commands.
+
 positional arguments:
-  query
+  query                 Knowledge-base query; pass an empty string to
+                        enumerate accessible bases.
 
 options:
   -h, --help            show this help message and exit
-  --cursor CURSOR
-  --limit LIMIT
-  --all
+  --cursor CURSOR       Opaque starting cursor from a previous response.
+  --limit LIMIT         Bases per page (default: 20; range: 1-20).
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima kb search-base "product docs" --all --max-pages 5 --json
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima kb show-base`
@@ -230,16 +410,28 @@ options:
 ```text
 usage: ima kb show-base [-h] --kb-id KB_ID [--json]
 
+Read metadata for one knowledge base selected by search-base or addable.
+
 options:
   -h, --help     show this help message and exit
-  --kb-id KB_ID
-  --json
+  --kb-id KB_ID  Knowledge-base identifier from search-base or addable.
+  --json         Print one structured JSON document to stdout; JSON failures
+                 keep stderr empty.
+
+Example:
+  ima kb show-base --kb-id "kb_test" --json
+
+Cover URL query strings and fragments are removed from CLI output.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 ### `ima note`
 
 ```text
 usage: ima note [-h] {search,folders,list,get,create,append} ...
+
+Search, list, read, create, and append IMA Notes.
 
 positional arguments:
   {search,folders,list,get,create,append}
@@ -252,6 +444,9 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+
+Workflow: search or list to obtain note_id, then use get, append, or ima kb
+add-note. Run ima note <command> --help for examples and write-safety details.
 ```
 
 #### `ima note append`
@@ -259,14 +454,28 @@ options:
 ```text
 usage: ima note append [-h] (--content CONTENT | --file FILE) [--json] note_id
 
+Append inline Markdown or a local UTF-8 Markdown file to one remote Note.
+
 positional arguments:
-  note_id
+  note_id            Canonical Note identifier returned by search or list.
 
 options:
   -h, --help         show this help message and exit
-  --content CONTENT
-  --file FILE
-  --json
+  --content CONTENT  Inline Markdown to append; mutually exclusive with
+                     --file.
+  --file FILE        Path to a UTF-8 Markdown content file to append.
+  --json             Print one structured JSON document to stdout; JSON
+                     failures keep stderr empty.
+
+Example:
+  ima note append "note_test" --content "## Update" --json
+
+Remote write: confirm the target and content before running this command.
+
+Local paths, data URIs, and unsupported local images are removed before
+writing.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima note create`
@@ -275,13 +484,28 @@ options:
 usage: ima note create [-h] [--title TITLE] [--folder-id FOLDER_ID]
                        (--content CONTENT | --file FILE) [--json]
 
+Create one remote Note from inline Markdown or a local UTF-8 Markdown file.
+
 options:
   -h, --help            show this help message and exit
-  --title TITLE
+  --title TITLE         Optional title; prepended as a Markdown H1.
   --folder-id FOLDER_ID
-  --content CONTENT
-  --file FILE
-  --json
+                        Destination folder_id; omit for the default location.
+  --content CONTENT     Inline Markdown body; mutually exclusive with --file.
+  --file FILE           Path to a UTF-8 Markdown content file; this is not a
+                        knowledge-base upload.
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima note create --title "Release plan" --file ".\plan.md" --json
+
+Remote write: confirm the target and content before running this command.
+
+Local paths, data URIs, and unsupported local images are removed before
+writing.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima note folders`
@@ -290,14 +514,26 @@ options:
 usage: ima note folders [-h] [--cursor CURSOR] [--limit LIMIT] [--all]
                         [--max-pages MAX_PAGES] [--json]
 
+List Note folders and return folder_id values for note list or create.
+
 options:
   -h, --help            show this help message and exit
-  --cursor CURSOR
-  --limit LIMIT
-  --all                 Collect all pages.
+  --cursor CURSOR       Opaque starting cursor from a previous response
+                        (default: 0).
+  --limit LIMIT         Folders per page (default: 20; range: 1-20).
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-                        Maximum pages when using --all.
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima note folders --all --max-pages 5 --json
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima note get`
@@ -305,12 +541,20 @@ options:
 ```text
 usage: ima note get [-h] [--json] note_id
 
+Read one Note by the note_id returned by search or list.
+
 positional arguments:
-  note_id
+  note_id     Canonical Note identifier returned by search or list.
 
 options:
   -h, --help  show this help message and exit
-  --json
+  --json      Print one structured JSON document to stdout; JSON failures keep
+              stderr empty.
+
+Example:
+  ima note get "note_test" --json
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima note list`
@@ -320,16 +564,30 @@ usage: ima note list [-h] [--folder-id FOLDER_ID] [--cursor CURSOR]
                      [--sort {updated,created,title,size}] [--limit LIMIT]
                      [--all] [--max-pages MAX_PAGES] [--json]
 
+List Notes and return note_id values, optionally scoped to one folder.
+
 options:
   -h, --help            show this help message and exit
   --folder-id FOLDER_ID
-  --cursor CURSOR
+                        Folder to list; omit for the root Notes view.
+  --cursor CURSOR       Opaque starting cursor from a previous response.
   --sort {updated,created,title,size}
-  --limit LIMIT
-  --all                 Collect all pages.
+                        Result order (default: updated); size is reserved but
+                        currently unsupported.
+  --limit LIMIT         Notes per page (default: 20; range: 1-20).
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-                        Maximum pages when using --all.
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima note list --folder-id "folder_test" --all --max-pages 5 --json
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 #### `ima note search`
@@ -341,17 +599,31 @@ usage: ima note search [-h] [--search-type {title,content}]
                        [--json]
                        query
 
+Search Notes and return note_id values for get, append, or kb add-note.
+
 positional arguments:
-  query
+  query                 Text to match against note titles or content.
 
 options:
   -h, --help            show this help message and exit
   --search-type {title,content}
+                        Field to search (default: title).
   --sort {updated,created,title,size}
-  --start START
-  --limit LIMIT
-  --all                 Collect all pages.
+                        Result order (default: updated); size is reserved but
+                        currently unsupported.
+  --start START         Zero-based result offset (default: 0; minimum: 0).
+  --limit LIMIT         Results per page (default: 20; range: 1-20).
+  --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
-                        Maximum pages when using --all.
-  --json
+                        Maximum pages with --all (default: 100; range:
+                        1-1000).
+  --json                Print one structured JSON document to stdout; JSON
+                        failures keep stderr empty.
+
+Example:
+  ima note search "release plan" --search-type content --all --max-pages 5 --json
+
+With --all, reaching --max-pages preserves results and exits 9 as partial.
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```

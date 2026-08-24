@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import sys
+from textwrap import fill
 from typing import Sequence
 
 from .config import CredentialStatus, Credentials, inspect_credentials, load_credentials
@@ -23,6 +24,10 @@ from .url_ingest import UrlIngestService
 from .validation import validate_max_bases, validate_max_pages, validate_timeout
 
 
+def _wrap(text: str) -> str:
+    return fill(text, width=78, break_on_hyphens=False)
+
+
 class CliArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         raise InputError(message, code="usage_error")
@@ -32,16 +37,67 @@ def build_parser(*, prog: str = "ima") -> argparse.ArgumentParser:
     parser = CliArgumentParser(
         prog=prog,
         description="Manage IMA notes and knowledge bases from the command line.",
+        epilog=(
+            "Start here:\n"
+            "  ima auth\n"
+            "  ima note --help\n"
+            "  ima kb --help\n\n" + _wrap(
+                "Credentials are read from IMA_OPENAPI_CLIENTID and IMA_OPENAPI_APIKEY, "
+                "then project .env or user config. Use --json on leaf commands for one "
+                "machine-readable stdout document. Exit 9 means partial/itemized failure; "
+                "exit 75 means a temporary failure eligible for bounded backoff.",
+            )
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    auth_parser = subparsers.add_parser("auth", help="Check whether IMA credentials are configured.")
-    auth_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
+    auth_parser = subparsers.add_parser(
+        "auth",
+        help="Check whether IMA credentials are configured.",
+        description=_wrap(
+            "Report whether both IMA credentials are configured and where each value "
+            "was found, without printing credential values.",
+        ),
+        epilog=(
+            "Example:\n"
+            "  ima auth --json\n\n" + _wrap(
+                "Credential priority: environment, project .env, then user config. "
+                "Missing credentials exit 3. JSON writes one stdout document and keeps "
+                "stderr empty on failure.",
+            )
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    auth_parser.add_argument(
+        "--json", action="store_true", dest="as_json",
+        help="Print one structured JSON document to stdout.",
+    )
 
-    note_parser = subparsers.add_parser("note", help="Manage IMA notes.")
+    note_parser = subparsers.add_parser(
+        "note",
+        help="Manage IMA notes.",
+        description="Search, list, read, create, and append IMA Notes.",
+        epilog=_wrap(
+            "Workflow: search or list to obtain note_id, then use get, append, or "
+            "ima kb add-note. Run ima note <command> --help for examples and "
+            "write-safety details.",
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_note_subcommands(note_parser.add_subparsers(dest="note_action", required=True))
 
-    kb_parser = subparsers.add_parser("kb", help="Manage IMA knowledge bases.")
+    kb_parser = subparsers.add_parser(
+        "kb",
+        help="Manage IMA knowledge bases.",
+        description=_wrap("Discover knowledge bases, search content, import material, and read original media."),
+        epilog=_wrap(
+            "Workflow: search-base or addable -> knowledge_base_id; browse or search "
+            "-> media_id; media-info -> read for text or export for binary content. "
+            "Run ima kb <command> --help before remote writes.",
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_kb_subcommands(kb_parser.add_subparsers(dest="kb_action", required=True))
 
     return parser
