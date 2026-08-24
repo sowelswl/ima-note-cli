@@ -136,7 +136,7 @@ class KnowledgeBaseApiClient(ImaApiClient):
         endpoint = "search_knowledge_base"
         data = self.post_read_json(endpoint, {"query": query, "cursor": cursor, "limit": _limit(limit, 1, 20)})
         raw = require_array(data, "info_list", endpoint)
-        return {"knowledge_bases": [self._parse_kb_summary(item, endpoint, f"data.info_list[{i}]") for i, item in enumerate(raw)],
+        return {"knowledge_bases": [self._parse_kb_summary(item, endpoint, f"data.info_list[{i}]", cover_optional=True, id_alias="kb_id", name_alias="kb_name") for i, item in enumerate(raw)],
                 "next_cursor": optional_string(data, "next_cursor", endpoint), "is_end": require_bool(data, "is_end", endpoint), "query": query}
 
     def list_addable_knowledge_bases(self, limit: int, *, cursor: str = "") -> dict[str, Any]:
@@ -294,9 +294,39 @@ class KnowledgeBaseApiClient(ImaApiClient):
         return item
 
     @classmethod
-    def _parse_kb_summary(cls, value: Any, endpoint: str, path: str, cover_optional: bool = False) -> KnowledgeBaseSummary:
+    def _parse_kb_summary(
+        cls,
+        value: Any,
+        endpoint: str,
+        path: str,
+        cover_optional: bool = False,
+        *,
+        id_alias: str | None = None,
+        name_alias: str | None = None,
+    ) -> KnowledgeBaseSummary:
         item = cls._dict(value, endpoint, path)
-        return KnowledgeBaseSummary(require_identifier(item, "id", endpoint, path), require_non_empty_string(item, "name", endpoint, path), optional_string(item, "cover_url", endpoint, path) if cover_optional else require_non_empty_string(item, "cover_url", endpoint, path))
+        knowledge_base_id = cls._required_alias(item, "id", id_alias, endpoint, path)
+        name = cls._required_alias(item, "name", name_alias, endpoint, path)
+        cover_url = optional_string(item, "cover_url", endpoint, path) if cover_optional else require_non_empty_string(item, "cover_url", endpoint, path)
+        return KnowledgeBaseSummary(knowledge_base_id, name, cover_url)
+
+    @staticmethod
+    def _required_alias(
+        item: dict[str, Any], primary: str, alias: str | None, endpoint: str, path: str,
+    ) -> str:
+        if alias is None or alias not in item:
+            return require_non_empty_string(item, primary, endpoint, path)
+        alias_value = require_non_empty_string(item, alias, endpoint, path)
+        if primary not in item:
+            return alias_value
+        primary_value = require_non_empty_string(item, primary, endpoint, path)
+        if primary_value != alias_value:
+            raise ApiProtocolError(
+                f"IMA API endpoint {endpoint} returned conflicting {primary} and {alias} fields.",
+                endpoint=endpoint,
+                details={"field": f"{path}.{primary}"},
+            )
+        return primary_value
 
     @classmethod
     def _parse_kb_detail(cls, value: Any, endpoint: str, path: str) -> KnowledgeBaseResult:

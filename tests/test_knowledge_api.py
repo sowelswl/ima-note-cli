@@ -86,6 +86,37 @@ class KnowledgeContractTests(unittest.TestCase):
         with self.assertRaises(ApiProtocolError):
             incomplete.search_knowledge("test", "kb_test_1")
 
+    def test_search_bases_accepts_observed_aliases_and_rejects_conflicts(self) -> None:
+        observed = RecordingKnowledgeClient({
+            "search_knowledge_base": {
+                "info_list": [{
+                    "kb_id": "kb_observed",
+                    "kb_name": "Observed KB",
+                    "cover_url": "",
+                }],
+                "next_cursor": "",
+                "is_end": True,
+            }
+        })
+        item = observed.search_knowledge_bases("test", 20)["knowledge_bases"][0]
+        self.assertEqual((item.knowledge_base_id, item.name, item.cover_url), ("kb_observed", "Observed KB", ""))
+
+        conflict = RecordingKnowledgeClient({
+            "search_knowledge_base": {
+                "info_list": [{
+                    "id": "kb_documented",
+                    "kb_id": "kb_observed",
+                    "name": "Same KB",
+                    "kb_name": "Same KB",
+                    "cover_url": "https://ima.qq.com/cover.png",
+                }],
+                "next_cursor": "",
+                "is_end": True,
+            }
+        })
+        with self.assertRaises(ApiProtocolError):
+            conflict.search_knowledge_bases("test", 20)
+
     def test_write_contract_fixtures_and_limits(self) -> None:
         client = self.client({
             "import_urls": "import_urls_partial_success.json",
