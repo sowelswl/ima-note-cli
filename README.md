@@ -10,6 +10,7 @@
 - 搜索、列出、读取、创建和追加 Notes；
 - 搜索/浏览单个或多个 Knowledge base，添加笔记、网页、远程文件和本地文件；
 - 安全读取或导出原始媒体；
+- 通过精确名称或账号绑定的本地 alias 解析 Note、文件夹、知识库和媒体；
 - 为列表/搜索提供 `--all --max-pages` 有界分页；
 - 为文件冲突提供 `--on-conflict error|rename`；
 - 为远程下载和 COS 上传提供 `--download-timeout`、`--upload-timeout`；
@@ -79,6 +80,41 @@ export IMA_OPENAPI_APIKEY="your_api_key"
 ```
 
 Windows 若遇到终端编码错误，可设置 `PYTHONUTF8=1` 与 `PYTHONIOENCODING=utf-8` 后重试。
+
+## 资源引用与本地 alias
+
+新的通用参数 `--kb`、`--note`、`--folder`、`--media` 接受三种显式引用：
+
+```text
+id:kb_123
+alias:research
+name:AI Research
+```
+
+通用参数中的无前缀值仍按 ID 解释。现有位置 ID、`--kb-id`、`--note-id`、`--folder-id`、`--media-id` 继续作为纯 ID 兼容入口，不会在失败后自动改按名称搜索。`name:` 只进行去除输入首尾空白后的区分大小写精确匹配；解析最多读取 100 个候选页，零匹配、多个同名匹配或分页未完整扫描都会失败，绝不静默选择第一项。JSON 错误会返回稳定 code 和脱敏候选项。
+
+使用 `ima resolve` 显式查找 canonical ID；仅在该命令中，无前缀值表示精确名称：
+
+```bash
+ima resolve kb "AI Research" --json
+ima resolve note "Weekly Plan" --json
+ima resolve note-folder "Work" --json
+ima resolve kb-folder "Sources" --kb alias:research --json
+ima resolve media "paper.pdf" --kb alias:research --json
+```
+
+KB 文件夹和媒体名称必须带知识库作用域。本地 alias 按资源类型和当前账号隔离，存储于 `~/.config/ima/aliases.json`；alias 名称为 1–64 个 ASCII 字母、数字、点、下划线或连字符且必须以字母或数字开头。账号指纹不包含 secret，KB 文件夹和媒体 alias 还会绑定 KB，跨账号或跨 KB 使用会失败：
+
+```bash
+ima alias set kb.research id:kb_123
+ima alias set media.paper id:media_456 --kb alias:research
+ima alias list --type kb --json
+ima alias unset kb.research
+ima kb browse --kb alias:research
+ima note get --note "name:Weekly Plan"
+```
+
+重复设置已有 alias 默认失败；只有确认替换目标后才使用 `ima alias set kb.research id:kb_456 --force`。所有远程写命令会先完成全部引用解析，再开始导入、追加或上传。
 
 ## 常见工作流
 

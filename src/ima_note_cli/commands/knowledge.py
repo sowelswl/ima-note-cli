@@ -21,7 +21,7 @@ def execute(args: Any, client: Any, *, media_service: Any = None, upload_service
         if kb_ids and args.max_bases is not None:
             raise InputError("--max-bases may only be used with --all-bases.", details={"field": "--max-bases"})
         if (len(kb_ids) != 1) and args.cursor:
-            raise InputError("--cursor may only be used with a single --kb-id.", details={"field": "--cursor"})
+            raise InputError("--cursor may only be used with a single --kb-id or --kb.", details={"field": "--cursor"})
         if len(kb_ids) == 1:
             kb_id = kb_ids[0]
             return _cursor(args, lambda cursor: client.search_knowledge(args.query, kb_id, cursor=cursor), "items", kb_entry_to_dict, {"query": args.query, "knowledge_base_id": kb_id})

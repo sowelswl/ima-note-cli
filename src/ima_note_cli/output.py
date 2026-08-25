@@ -50,7 +50,10 @@ def emit_json_error(command: str, error: ImaCliError, *, stream: TextIO | None =
 
 
 def emit_human_error(error: ImaCliError, *, stream: TextIO | None = None) -> None:
-    print(f"Error: {error.message}", file=stream or sys.stderr)
+    target = stream or sys.stderr
+    print(f"Error: {error.message}", file=target)
+    for line in error.human_detail_lines():
+        print(line, file=target)
 
 
 def emit_command_result(

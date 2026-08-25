@@ -332,7 +332,11 @@ def check_generated_and_distribution() -> None:
             fail(f"README does not cover parser leaf command: {command}")
     parser = stable_parser()
     parser_options = {option for _, current in walk_parsers(parser) for action in current._actions for option in action.option_strings}
-    key_options = {"--json", "--note-id", "--doc-id", "--all", "--max-pages", "--all-bases", "--max-bases", "--on-conflict", "--download-timeout", "--upload-timeout", "--force"}
+    key_options = {
+        "--json", "--note-id", "--doc-id", "--kb", "--note", "--folder", "--media",
+        "--all", "--max-pages", "--all-bases", "--max-bases", "--on-conflict",
+        "--download-timeout", "--upload-timeout", "--force",
+    }
     missing_parser = key_options - parser_options
     if missing_parser:
         fail(f"parser is missing required compatibility options: {sorted(missing_parser)}")

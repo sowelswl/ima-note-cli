@@ -75,7 +75,12 @@ def add_note_subcommands(subparsers: Any) -> None:
         "List Notes and return note_id values, optionally scoped to one folder.",
         'ima note list --folder-id "folder_test" --all --max-pages 5 --json', _PAGING,
     )
-    listing.add_argument("--folder-id", default="", help="Folder to list; omit for the root Notes view.")
+    listing_folder = listing.add_mutually_exclusive_group()
+    listing_folder.add_argument("--folder-id", default="", help="Folder ID to list; omit for the root Notes view.")
+    listing_folder.add_argument(
+        "--folder", dest="folder_ref", metavar="FOLDER_REF",
+        help="Note-folder reference using id:, alias:, or exact name: syntax.",
+    )
     listing.add_argument("--cursor", default="", help="Opaque starting cursor from a previous response.")
     listing.add_argument(
         "--sort", choices=("updated", "created", "title", "size"), default="updated",
@@ -90,7 +95,12 @@ def add_note_subcommands(subparsers: Any) -> None:
         "Read one Note by the note_id returned by search or list.",
         'ima note get "note_test" --json',
     )
-    get.add_argument("note_id", help="Canonical Note identifier returned by search or list.")
+    get_target = get.add_mutually_exclusive_group(required=True)
+    get_target.add_argument("note_id", nargs="?", help="Canonical Note identifier returned by search or list.")
+    get_target.add_argument(
+        "--note", dest="note_ref", metavar="NOTE_REF",
+        help="Note reference using id:, alias:, or exact name: syntax.",
+    )
     _json(get)
 
     create = _command(
@@ -101,7 +111,12 @@ def add_note_subcommands(subparsers: Any) -> None:
         "Local paths, data URIs, and unsupported local images are removed before writing.",
     )
     create.add_argument("--title", help="Optional title; prepended as a Markdown H1.")
-    create.add_argument("--folder-id", default="", help="Destination folder_id; omit for the default location.")
+    create_folder = create.add_mutually_exclusive_group()
+    create_folder.add_argument("--folder-id", default="", help="Destination folder_id; omit for the default location.")
+    create_folder.add_argument(
+        "--folder", dest="folder_ref", metavar="FOLDER_REF",
+        help="Destination Note-folder reference using id:, alias:, or exact name: syntax.",
+    )
     group = create.add_mutually_exclusive_group(required=True)
     group.add_argument("--content", help="Inline Markdown body; mutually exclusive with --file.")
     group.add_argument(
@@ -117,7 +132,12 @@ def add_note_subcommands(subparsers: Any) -> None:
         _WRITE,
         "Local paths, data URIs, and unsupported local images are removed before writing.",
     )
-    append.add_argument("note_id", help="Canonical Note identifier returned by search or list.")
+    append_target = append.add_mutually_exclusive_group(required=True)
+    append_target.add_argument("note_id", nargs="?", help="Canonical Note identifier returned by search or list.")
+    append_target.add_argument(
+        "--note", dest="note_ref", metavar="NOTE_REF",
+        help="Note reference using id:, alias:, or exact name: syntax.",
+    )
     group = append.add_mutually_exclusive_group(required=True)
     group.add_argument("--content", help="Inline Markdown to append; mutually exclusive with --file.")
     group.add_argument("--file", help="Path to a UTF-8 Markdown content file to append.")

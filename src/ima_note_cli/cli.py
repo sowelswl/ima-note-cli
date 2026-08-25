@@ -7,6 +7,7 @@ import sys
 from textwrap import fill
 from typing import Sequence
 
+from .aliases import AliasStore, RESOURCE_TYPES
 from .config import CredentialStatus, Credentials, inspect_credentials, load_credentials
 from .errors import ConfigError, ImaCliError, InputError
 from .knowledge_api import KnowledgeBaseApiClient
@@ -19,6 +20,9 @@ from .source_http import SourceHttpClient
 from .command_result import CommandResult
 from .commands.notes import execute as execute_note
 from .commands.knowledge import execute as execute_knowledge
+from .commands.references import execute_alias, execute_resolve
+from .reference_cli import prepare_knowledge_references, prepare_note_references
+from .references import ResourceResolver
 from .upload_service import UploadService
 from .url_ingest import UrlIngestService
 from .validation import validate_max_bases, validate_max_pages, validate_timeout
@@ -41,7 +45,9 @@ def build_parser(*, prog: str = "ima") -> argparse.ArgumentParser:
             "Start here:\n"
             "  ima auth\n"
             "  ima note --help\n"
-            "  ima kb --help\n\n" + _wrap(
+            "  ima kb --help\n"
+            "  ima resolve --help\n"
+            "  ima alias --help\n\n" + _wrap(
                 "Credentials are read from IMA_OPENAPI_CLIENTID and IMA_OPENAPI_APIKEY, "
                 "then project .env or user config. Use --json on leaf commands for one "
                 "machine-readable stdout document. Exit 9 means partial/itemized failure; "
@@ -79,9 +85,9 @@ def build_parser(*, prog: str = "ima") -> argparse.ArgumentParser:
         help="Manage IMA notes.",
         description="Search, list, read, create, and append IMA Notes.",
         epilog=_wrap(
-            "Workflow: search or list to obtain note_id, then use get, append, or "
-            "ima kb add-note. Run ima note <command> --help for examples and "
-            "write-safety details.",
+            "Use canonical IDs directly or pass id:, alias:, or exact name: references "
+            "through --note and --folder. Run ima resolve or ima alias --help to avoid "
+            "copying repeated IDs, and inspect leaf-command help before writes.",
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -92,13 +98,74 @@ def build_parser(*, prog: str = "ima") -> argparse.ArgumentParser:
         help="Manage IMA knowledge bases.",
         description=_wrap("Discover knowledge bases, search content, import material, and read original media."),
         epilog=_wrap(
-            "Workflow: search-base or addable -> knowledge_base_id; browse or search "
-            "-> media_id; media-info -> read for text or export for binary content. "
+            "Use canonical IDs directly or pass id:, alias:, or exact name: references "
+            "through --kb, --folder, --note, and --media. Scoped names fail on ambiguity. "
             "Run ima kb <command> --help before remote writes.",
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     add_kb_subcommands(kb_parser.add_subparsers(dest="kb_action", required=True))
+
+    resolve_parser = subparsers.add_parser(
+        "resolve",
+        help="Resolve an exact resource name or explicit reference.",
+        description=_wrap(
+            "Resolve one kb, note, note-folder, kb-folder, or media reference to its canonical ID. "
+            "A bare value is treated as an exact name only for this command."
+        ),
+        epilog=(
+            "Example:\n"
+            '  ima resolve kb "AI Research" --json\n\n'
+            + _wrap("Exact-name ambiguity and incomplete candidate scans fail without choosing a result. Exit 75 means a temporary failure eligible for bounded backoff.")
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    resolve_parser.add_argument("resource_type", choices=RESOURCE_TYPES, metavar="TYPE", help="Resource type to resolve.")
+    resolve_parser.add_argument("reference", help="Exact name, or an explicit id:, alias:, or name: reference.")
+    resolve_kb = resolve_parser.add_mutually_exclusive_group()
+    resolve_kb.add_argument("--kb-id", help="Knowledge-base ID that scopes kb-folder or media resolution.")
+    resolve_kb.add_argument("--kb", dest="kb_ref", metavar="KB_REF", help="Knowledge-base reference for scoped resolution.")
+    resolve_parser.add_argument("--json", action="store_true", dest="as_json", help="Print one structured JSON document to stdout.")
+
+    alias_parser = subparsers.add_parser(
+        "alias",
+        help="Manage account-bound local resource aliases.",
+        description=_wrap("Store typed aliases in the current user's IMA configuration."),
+        epilog=_wrap("Alias records contain resource IDs and a non-secret account fingerprint, never API credentials."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    alias_subparsers = alias_parser.add_subparsers(dest="alias_action", required=True)
+    alias_set = alias_subparsers.add_parser(
+        "set", help="Create or replace one alias.",
+        description=_wrap("Bind one typed local alias to a canonical resource target for the configured account."),
+        epilog="Example:\n  ima alias set kb.research id:kb_test --json\n\n" + _wrap("Exit 75 means a temporary failure eligible for bounded backoff."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    alias_set.add_argument("alias_key", help="Typed key such as kb.research or media.paper.")
+    alias_set.add_argument("target", help="Target ID or explicit id:, alias:, or name: reference.")
+    alias_set_kb = alias_set.add_mutually_exclusive_group()
+    alias_set_kb.add_argument("--kb-id", help="Knowledge-base ID required for kb-folder and media aliases.")
+    alias_set_kb.add_argument("--kb", dest="kb_ref", metavar="KB_REF", help="Knowledge-base reference for a scoped alias.")
+    alias_set.add_argument("--force", action="store_true", help="Replace an existing alias for this account.")
+    alias_set.add_argument("--json", action="store_true", dest="as_json", help="Print one structured JSON document to stdout.")
+
+    alias_list = alias_subparsers.add_parser(
+        "list", help="List aliases for the configured account.",
+        description=_wrap("List typed aliases stored for the currently configured IMA account."),
+        epilog="Example:\n  ima alias list --type kb --json\n\n" + _wrap("Exit 75 means a temporary failure eligible for bounded backoff."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    alias_list.add_argument("--type", dest="resource_type", choices=RESOURCE_TYPES, help="Filter by resource type.")
+    alias_list.add_argument("--json", action="store_true", dest="as_json", help="Print one structured JSON document to stdout.")
+
+    alias_unset = alias_subparsers.add_parser(
+        "unset", help="Remove one alias.",
+        description=_wrap("Remove one typed local alias for the currently configured IMA account."),
+        epilog="Example:\n  ima alias unset kb.research --json\n\n" + _wrap("Exit 75 means a temporary failure eligible for bounded backoff."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    alias_unset.add_argument("alias_key", help="Typed key such as kb.research or media.paper.")
+    alias_unset.add_argument("--json", action="store_true", dest="as_json", help="Print one structured JSON document to stdout.")
 
     return parser
 
@@ -135,17 +202,26 @@ def run(argv: Sequence[str] | None = None) -> int:
             status.client_id, status.api_key,
             status.client_id_source or "unknown", status.api_key_source or "unknown",
         )
+        notes = NotesApiClient(credentials)
+        knowledge = KnowledgeBaseApiClient(credentials)
+        aliases = AliasStore.for_client_id(credentials.client_id)
+        resolver = ResourceResolver(aliases=aliases, notes=notes, knowledge=knowledge)
         if args.command == "note":
-            return emit_command_result(command_name, execute_note(args, NotesApiClient(credentials)), as_json=as_json)
+            prepare_note_references(args, resolver)
+            return emit_command_result(command_name, execute_note(args, notes), as_json=as_json)
         if args.command == "kb":
-            knowledge = KnowledgeBaseApiClient(credentials)
+            prepare_knowledge_references(args, resolver)
             media_service = None
             if args.kb_action in {"media-info", "read", "export"}:
-                media_service = MediaContentService(knowledge, NotesApiClient(credentials), SourceHttpClient())
+                media_service = MediaContentService(knowledge, notes, SourceHttpClient())
             upload = UploadService(knowledge)
             url_service = UrlIngestService(knowledge, upload)
             result = execute_knowledge(args, knowledge, media_service=media_service, upload_service=upload, url_service=url_service)
             return emit_command_result(command_name, result, as_json=as_json)
+        if args.command == "resolve":
+            return emit_command_result(command_name, execute_resolve(args, resolver), as_json=as_json)
+        if args.command == "alias":
+            return emit_command_result(command_name, execute_alias(args, resolver, aliases), as_json=as_json)
         raise InputError("Unknown command.")
     except KeyboardInterrupt:
         error = ImaCliError("Interrupted.", code="interrupted", exit_code=130)
@@ -164,9 +240,9 @@ def _command_name(argv: Sequence[str]) -> str:
     values = [value for value in argv if not value.startswith("-")]
     if not values:
         return "cli"
-    if values[0] in {"note", "kb"} and len(values) > 1:
+    if values[0] in {"note", "kb", "alias"} and len(values) > 1:
         return f"{values[0]}.{values[1]}"
-    return values[0] if values[0] in {"auth"} else "cli"
+    return values[0] if values[0] in {"auth", "resolve"} else "cli"
 
 
 def _command_name_from_args(args: argparse.Namespace) -> str:
@@ -174,6 +250,8 @@ def _command_name_from_args(args: argparse.Namespace) -> str:
         return f"note.{args.note_action}"
     if args.command == "kb":
         return f"kb.{args.kb_action}"
+    if args.command == "alias":
+        return f"alias.{args.alias_action}"
     return args.command
 
 

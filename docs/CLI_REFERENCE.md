@@ -9,28 +9,118 @@ This file is generated from `ima_note_cli.cli.build_parser()` and is the complet
 ## `ima`
 
 ```text
-usage: ima [-h] {auth,note,kb} ...
+usage: ima [-h] {auth,note,kb,resolve,alias} ...
 
 Manage IMA notes and knowledge bases from the command line.
 
 positional arguments:
-  {auth,note,kb}
-    auth          Check whether IMA credentials are configured.
-    note          Manage IMA notes.
-    kb            Manage IMA knowledge bases.
+  {auth,note,kb,resolve,alias}
+    auth                Check whether IMA credentials are configured.
+    note                Manage IMA notes.
+    kb                  Manage IMA knowledge bases.
+    resolve             Resolve an exact resource name or explicit reference.
+    alias               Manage account-bound local resource aliases.
 
 options:
-  -h, --help      show this help message and exit
+  -h, --help            show this help message and exit
 
 Start here:
   ima auth
   ima note --help
   ima kb --help
+  ima resolve --help
+  ima alias --help
 
 Credentials are read from IMA_OPENAPI_CLIENTID and IMA_OPENAPI_APIKEY, then
 project .env or user config. Use --json on leaf commands for one
 machine-readable stdout document. Exit 9 means partial/itemized failure; exit
 75 means a temporary failure eligible for bounded backoff.
+```
+
+### `ima alias`
+
+```text
+usage: ima alias [-h] {set,list,unset} ...
+
+Store typed aliases in the current user's IMA configuration.
+
+positional arguments:
+  {set,list,unset}
+    set             Create or replace one alias.
+    list            List aliases for the configured account.
+    unset           Remove one alias.
+
+options:
+  -h, --help        show this help message and exit
+
+Alias records contain resource IDs and a non-secret account fingerprint, never
+API credentials.
+```
+
+#### `ima alias list`
+
+```text
+usage: ima alias list [-h] [--type {kb,note,note-folder,kb-folder,media}]
+                      [--json]
+
+List typed aliases stored for the currently configured IMA account.
+
+options:
+  -h, --help            show this help message and exit
+  --type {kb,note,note-folder,kb-folder,media}
+                        Filter by resource type.
+  --json                Print one structured JSON document to stdout.
+
+Example:
+  ima alias list --type kb --json
+
+Exit 75 means a temporary failure eligible for bounded backoff.
+```
+
+#### `ima alias set`
+
+```text
+usage: ima alias set [-h] [--kb-id KB_ID | --kb KB_REF] [--force] [--json]
+                     alias_key target
+
+Bind one typed local alias to a canonical resource target for the configured
+account.
+
+positional arguments:
+  alias_key      Typed key such as kb.research or media.paper.
+  target         Target ID or explicit id:, alias:, or name: reference.
+
+options:
+  -h, --help     show this help message and exit
+  --kb-id KB_ID  Knowledge-base ID required for kb-folder and media aliases.
+  --kb KB_REF    Knowledge-base reference for a scoped alias.
+  --force        Replace an existing alias for this account.
+  --json         Print one structured JSON document to stdout.
+
+Example:
+  ima alias set kb.research id:kb_test --json
+
+Exit 75 means a temporary failure eligible for bounded backoff.
+```
+
+#### `ima alias unset`
+
+```text
+usage: ima alias unset [-h] [--json] alias_key
+
+Remove one typed local alias for the currently configured IMA account.
+
+positional arguments:
+  alias_key   Typed key such as kb.research or media.paper.
+
+options:
+  -h, --help  show this help message and exit
+  --json      Print one structured JSON document to stdout.
+
+Example:
+  ima alias unset kb.research --json
+
+Exit 75 means a temporary failure eligible for bounded backoff.
 ```
 
 ### `ima auth`
@@ -80,15 +170,16 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
 
-Workflow: search-base or addable -> knowledge_base_id; browse or search ->
-media_id; media-info -> read for text or export for binary content. Run ima kb
-<command> --help before remote writes.
+Use canonical IDs directly or pass id:, alias:, or exact name: references
+through --kb, --folder, --note, and --media. Scoped names fail on ambiguity.
+Run ima kb <command> --help before remote writes.
 ```
 
 #### `ima kb add-file`
 
 ```text
-usage: ima kb add-file [-h] --kb-id KB_ID --file FILES [--folder-id FOLDER_ID]
+usage: ima kb add-file [-h] (--kb-id KB_ID | --kb KB_REF) --file FILES
+                       [--folder-id FOLDER_ID | --folder FOLDER_REF]
                        [--content-type CONTENT_TYPE]
                        [--on-conflict {error,rename}]
                        [--upload-timeout UPLOAD_TIMEOUT] [--json]
@@ -97,10 +188,14 @@ Upload 1-2000 supported local files to one knowledge base.
 
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID         Destination knowledge-base identifier from addable.
+  --kb-id KB_ID         Knowledge-base ID from search-base or addable.
+  --kb KB_REF           Knowledge-base reference using id:, alias:, or exact
+                        name: syntax.
   --file FILES          Local file path; repeat 1-2000 times.
   --folder-id FOLDER_ID
-                        Optional destination folder inside the knowledge base.
+                        Optional folder ID inside the knowledge base.
+  --folder FOLDER_REF   Optional KB-folder reference using id:, alias:, or
+                        exact name: syntax.
   --content-type CONTENT_TYPE
                         MIME type override for one file only; cannot be used
                         with repeated --file.
@@ -129,22 +224,29 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb add-note`
 
 ```text
-usage: ima kb add-note [-h] --kb-id KB_ID
-                       (--note-id NOTE_ID | --doc-id DEPRECATED_DOC_ID)
-                       [--title TITLE] [--folder-id FOLDER_ID] [--json]
+usage: ima kb add-note [-h] (--kb-id KB_ID | --kb KB_REF)
+                       (--note-id NOTE_ID | --note NOTE_REF | --doc-id DEPRECATED_DOC_ID)
+                       [--title TITLE]
+                       [--folder-id FOLDER_ID | --folder FOLDER_REF] [--json]
 
 Add an existing IMA Note to one knowledge base.
 
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID         Destination knowledge-base identifier from addable.
+  --kb-id KB_ID         Knowledge-base ID from search-base or addable.
+  --kb KB_REF           Knowledge-base reference using id:, alias:, or exact
+                        name: syntax.
   --note-id NOTE_ID     Canonical Note identifier from note search or list.
+  --note NOTE_REF       Note reference using id:, alias:, or exact name:
+                        syntax.
   --doc-id DEPRECATED_DOC_ID
                         Deprecated alias for --note-id; retained for
                         compatibility.
   --title TITLE         Optional title stored for this knowledge-base item.
   --folder-id FOLDER_ID
-                        Optional destination folder inside the knowledge base.
+                        Optional folder ID inside the knowledge base.
+  --folder FOLDER_REF   Optional KB-folder reference using id:, alias:, or
+                        exact name: syntax.
   --json                Print one structured JSON document to stdout; JSON
                         failures keep stderr empty.
 
@@ -160,7 +262,8 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb add-url`
 
 ```text
-usage: ima kb add-url [-h] --kb-id KB_ID --url URLS [--folder-id FOLDER_ID]
+usage: ima kb add-url [-h] (--kb-id KB_ID | --kb KB_REF) --url URLS
+                      [--folder-id FOLDER_ID | --folder FOLDER_REF]
                       [--on-conflict {error,rename}]
                       [--download-timeout DOWNLOAD_TIMEOUT]
                       [--upload-timeout UPLOAD_TIMEOUT] [--json]
@@ -170,10 +273,14 @@ use bounded download plus upload.
 
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID         Destination knowledge-base identifier from addable.
+  --kb-id KB_ID         Knowledge-base ID from search-base or addable.
+  --kb KB_REF           Knowledge-base reference using id:, alias:, or exact
+                        name: syntax.
   --url URLS            Public HTTP(S) URL; repeat 1-10 times.
   --folder-id FOLDER_ID
-                        Optional destination folder inside the knowledge base.
+                        Optional folder ID inside the knowledge base.
+  --folder FOLDER_REF   Optional KB-folder reference using id:, alias:, or
+                        exact name: syntax.
   --on-conflict {error,rename}
                         Downloaded-file name policy (default: error; rename
                         chooses a unique name).
@@ -230,7 +337,8 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb browse`
 
 ```text
-usage: ima kb browse [-h] --kb-id KB_ID [--folder-id FOLDER_ID]
+usage: ima kb browse [-h] (--kb-id KB_ID | --kb KB_REF)
+                     [--folder-id FOLDER_ID | --folder FOLDER_REF]
                      [--cursor CURSOR] [--limit LIMIT] [--all]
                      [--max-pages MAX_PAGES] [--json]
 
@@ -239,9 +347,13 @@ values.
 
 options:
   -h, --help            show this help message and exit
-  --kb-id KB_ID         Knowledge-base identifier from search-base or addable.
+  --kb-id KB_ID         Knowledge-base ID from search-base or addable.
+  --kb KB_REF           Knowledge-base reference using id:, alias:, or exact
+                        name: syntax.
   --folder-id FOLDER_ID
-                        Optional folder to browse; omit for the base root.
+                        Optional folder ID inside the knowledge base.
+  --folder FOLDER_REF   Optional KB-folder reference using id:, alias:, or
+                        exact name: syntax.
   --cursor CURSOR       Opaque starting cursor from a previous response.
   --limit LIMIT         Items per page (default: 20; range: 1-50).
   --all                 Collect pages until completion or --max-pages.
@@ -262,7 +374,8 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb export`
 
 ```text
-usage: ima kb export [-h] --media-id MEDIA_ID --output OUTPUT [--force]
+usage: ima kb export [-h] (--media-id MEDIA_ID | --media MEDIA_REF)
+                     [--kb-id KB_ID | --kb KB_REF] --output OUTPUT [--force]
                      [--json]
 
 Export up to 200 MiB of original media to a local file using atomic
@@ -271,6 +384,11 @@ replacement.
 options:
   -h, --help           show this help message and exit
   --media-id MEDIA_ID  Media identifier returned by kb browse or search.
+  --media MEDIA_REF    Media reference using id:, alias:, or exact name:
+                       syntax; name: requires a KB scope.
+  --kb-id KB_ID        Knowledge-base ID from search-base or addable.
+  --kb KB_REF          Knowledge-base reference using id:, alias:, or exact
+                       name: syntax.
   --output OUTPUT      Local output file; its parent directory must already
                        exist.
   --force              Atomically replace an existing regular output file.
@@ -288,7 +406,8 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb media-info`
 
 ```text
-usage: ima kb media-info [-h] --media-id MEDIA_ID [--json]
+usage: ima kb media-info [-h] (--media-id MEDIA_ID | --media MEDIA_REF)
+                         [--kb-id KB_ID | --kb KB_REF] [--json]
 
 Inspect redacted metadata and source availability for a media_id returned by
 browse or search.
@@ -296,6 +415,11 @@ browse or search.
 options:
   -h, --help           show this help message and exit
   --media-id MEDIA_ID  Media identifier returned by kb browse or search.
+  --media MEDIA_REF    Media reference using id:, alias:, or exact name:
+                       syntax; name: requires a KB scope.
+  --kb-id KB_ID        Knowledge-base ID from search-base or addable.
+  --kb KB_REF          Knowledge-base reference using id:, alias:, or exact
+                       name: syntax.
   --json               Print one structured JSON document to stdout; JSON
                        failures keep stderr empty.
 
@@ -310,7 +434,8 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb read`
 
 ```text
-usage: ima kb read [-h] --media-id MEDIA_ID [--json]
+usage: ima kb read [-h] (--media-id MEDIA_ID | --media MEDIA_REF)
+                   [--kb-id KB_ID | --kb KB_REF] [--json]
 
 Read up to 4 MiB of textual original content; use ima kb export for binary
 media.
@@ -318,6 +443,11 @@ media.
 options:
   -h, --help           show this help message and exit
   --media-id MEDIA_ID  Media identifier returned by kb browse or search.
+  --media MEDIA_REF    Media reference using id:, alias:, or exact name:
+                       syntax; name: requires a KB scope.
+  --kb-id KB_ID        Knowledge-base ID from search-base or addable.
+  --kb KB_REF          Knowledge-base reference using id:, alias:, or exact
+                       name: syntax.
   --json               Print one structured JSON document to stdout; JSON
                        failures keep stderr empty.
 
@@ -332,7 +462,7 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb search`
 
 ```text
-usage: ima kb search [-h] (--kb-id KB_ID | --all-bases)
+usage: ima kb search [-h] (--kb-id KB_ID | --kb KB_REF | --all-bases)
                      [--max-bases MAX_BASES] [--cursor CURSOR] [--all]
                      [--max-pages MAX_PAGES] [--json]
                      query
@@ -347,12 +477,13 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --kb-id KB_ID         Knowledge base ID; repeat for up to 20 bases.
+  --kb KB_REF           Knowledge-base reference; repeat for up to 20 bases.
   --all-bases           Search across discovered knowledge bases.
   --max-bases MAX_BASES
                         Maximum bases for --all-bases (default: 20; range:
                         1-100).
   --cursor CURSOR       Base-specific cursor; valid only with exactly one
-                        --kb-id.
+                        --kb-id or --kb.
   --all                 Collect pages until completion or --max-pages.
   --max-pages MAX_PAGES
                         Maximum pages with --all (default: 100; range:
@@ -408,13 +539,15 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima kb show-base`
 
 ```text
-usage: ima kb show-base [-h] --kb-id KB_ID [--json]
+usage: ima kb show-base [-h] (--kb-id KB_ID | --kb KB_REF) [--json]
 
 Read metadata for one knowledge base selected by search-base or addable.
 
 options:
   -h, --help     show this help message and exit
-  --kb-id KB_ID  Knowledge-base identifier from search-base or addable.
+  --kb-id KB_ID  Knowledge-base ID from search-base or addable.
+  --kb KB_REF    Knowledge-base reference using id:, alias:, or exact name:
+                 syntax.
   --json         Print one structured JSON document to stdout; JSON failures
                  keep stderr empty.
 
@@ -445,14 +578,17 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
 
-Workflow: search or list to obtain note_id, then use get, append, or ima kb
-add-note. Run ima note <command> --help for examples and write-safety details.
+Use canonical IDs directly or pass id:, alias:, or exact name: references
+through --note and --folder. Run ima resolve or ima alias --help to avoid
+copying repeated IDs, and inspect leaf-command help before writes.
 ```
 
 #### `ima note append`
 
 ```text
-usage: ima note append [-h] (--content CONTENT | --file FILE) [--json] note_id
+usage: ima note append [-h] [--note NOTE_REF]
+                       (--content CONTENT | --file FILE) [--json]
+                       [note_id]
 
 Append inline Markdown or a local UTF-8 Markdown file to one remote Note.
 
@@ -461,6 +597,7 @@ positional arguments:
 
 options:
   -h, --help         show this help message and exit
+  --note NOTE_REF    Note reference using id:, alias:, or exact name: syntax.
   --content CONTENT  Inline Markdown to append; mutually exclusive with
                      --file.
   --file FILE        Path to a UTF-8 Markdown content file to append.
@@ -481,7 +618,8 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima note create`
 
 ```text
-usage: ima note create [-h] [--title TITLE] [--folder-id FOLDER_ID]
+usage: ima note create [-h] [--title TITLE]
+                       [--folder-id FOLDER_ID | --folder FOLDER_REF]
                        (--content CONTENT | --file FILE) [--json]
 
 Create one remote Note from inline Markdown or a local UTF-8 Markdown file.
@@ -491,6 +629,8 @@ options:
   --title TITLE         Optional title; prepended as a Markdown H1.
   --folder-id FOLDER_ID
                         Destination folder_id; omit for the default location.
+  --folder FOLDER_REF   Destination Note-folder reference using id:, alias:,
+                        or exact name: syntax.
   --content CONTENT     Inline Markdown body; mutually exclusive with --file.
   --file FILE           Path to a UTF-8 Markdown content file; this is not a
                         knowledge-base upload.
@@ -539,17 +679,18 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima note get`
 
 ```text
-usage: ima note get [-h] [--json] note_id
+usage: ima note get [-h] [--note NOTE_REF] [--json] [note_id]
 
 Read one Note by the note_id returned by search or list.
 
 positional arguments:
-  note_id     Canonical Note identifier returned by search or list.
+  note_id          Canonical Note identifier returned by search or list.
 
 options:
-  -h, --help  show this help message and exit
-  --json      Print one structured JSON document to stdout; JSON failures keep
-              stderr empty.
+  -h, --help       show this help message and exit
+  --note NOTE_REF  Note reference using id:, alias:, or exact name: syntax.
+  --json           Print one structured JSON document to stdout; JSON failures
+                   keep stderr empty.
 
 Example:
   ima note get "note_test" --json
@@ -560,16 +701,18 @@ Exit 75 means a temporary failure eligible for bounded backoff.
 #### `ima note list`
 
 ```text
-usage: ima note list [-h] [--folder-id FOLDER_ID] [--cursor CURSOR]
-                     [--sort {updated,created,title,size}] [--limit LIMIT]
-                     [--all] [--max-pages MAX_PAGES] [--json]
+usage: ima note list [-h] [--folder-id FOLDER_ID | --folder FOLDER_REF]
+                     [--cursor CURSOR] [--sort {updated,created,title,size}]
+                     [--limit LIMIT] [--all] [--max-pages MAX_PAGES] [--json]
 
 List Notes and return note_id values, optionally scoped to one folder.
 
 options:
   -h, --help            show this help message and exit
   --folder-id FOLDER_ID
-                        Folder to list; omit for the root Notes view.
+                        Folder ID to list; omit for the root Notes view.
+  --folder FOLDER_REF   Note-folder reference using id:, alias:, or exact
+                        name: syntax.
   --cursor CURSOR       Opaque starting cursor from a previous response.
   --sort {updated,created,title,size}
                         Result order (default: updated); size is reserved but
@@ -626,4 +769,29 @@ Example:
 With --all, reaching --max-pages preserves results and exits 9 as partial.
 
 Exit 75 means a temporary failure eligible for bounded backoff.
+```
+
+### `ima resolve`
+
+```text
+usage: ima resolve [-h] [--kb-id KB_ID | --kb KB_REF] [--json] TYPE reference
+
+Resolve one kb, note, note-folder, kb-folder, or media reference to its
+canonical ID. A bare value is treated as an exact name only for this command.
+
+positional arguments:
+  TYPE           Resource type to resolve.
+  reference      Exact name, or an explicit id:, alias:, or name: reference.
+
+options:
+  -h, --help     show this help message and exit
+  --kb-id KB_ID  Knowledge-base ID that scopes kb-folder or media resolution.
+  --kb KB_REF    Knowledge-base reference for scoped resolution.
+  --json         Print one structured JSON document to stdout.
+
+Example:
+  ima resolve kb "AI Research" --json
+
+Exact-name ambiguity and incomplete candidate scans fail without choosing a
+result. Exit 75 means a temporary failure eligible for bounded backoff.
 ```

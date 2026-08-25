@@ -1,6 +1,6 @@
 ---
 name: ima-note-cli
-description: Install, verify, configure, and troubleshoot the `ima` Python CLI; use it to search, read, create, and append IMA Notes, browse and search Knowledge bases, inspect or export original media, import public URLs, and upload local or remote files. Use when a user needs CLI setup, credential guidance, JSON automation, pagination, safe writes/uploads, or compatibility help for the legacy `ima-note` executable and deprecated `--doc-id` alias.
+description: Install, verify, configure, and troubleshoot the `ima` Python CLI; use it to resolve typed resource references and local aliases, manage IMA Notes and Knowledge bases, inspect or export media, import URLs, and upload files. Use for CLI setup, credential guidance, JSON automation, pagination, safe writes/uploads, resource selection, or legacy compatibility.
 ---
 
 # Use the IMA CLI
@@ -28,6 +28,27 @@ Require `IMA_OPENAPI_CLIENTID` and `IMA_OPENAPI_APIKEY`. Resolve each field inde
 3. `~/.config/ima/client_id` or `~/.config/ima/api_key`.
 
 Prefer environment variables for a globally installed CLI. Never request, echo, log, or embed real credential values in commands. Use `setx` only when persistent Windows configuration is requested, and remind the user to open a new terminal. Use `ima auth` as the first credential diagnostic.
+
+## Resolve resources without copying IDs
+
+Use explicit typed references with the generic `--kb`, `--note`, `--folder`, and `--media` options:
+
+- `id:VALUE` is an explicit canonical ID.
+- `alias:VALUE` is an account-bound local alias.
+- `name:VALUE` performs a case-sensitive exact-name match after trimming the input.
+
+Bare values passed to generic options remain IDs. Never assume that a failed ID is a name, request fuzzy matching, or select the first match. Resolution scans at most 100 candidate pages; zero matches, multiple exact matches, and incomplete scans must fail before a read or write continues. Inspect structured `candidates` in JSON ambiguity errors.
+
+Use all four reference-management commands:
+
+- `ima resolve kb "AI Research" --json` resolves a bare exact name to its canonical ID.
+- `ima alias set kb.research id:KB_ID` creates a typed alias; add `--force` only after confirming replacement.
+- `ima alias list --type kb --json` lists aliases for the configured account.
+- `ima alias unset kb.research` removes one alias.
+
+The alias file is `~/.config/ima/aliases.json`. Alias names use 1–64 ASCII letters, digits, dots, underscores, or hyphens and start with a letter or digit. The file stores resource IDs and a non-secret account fingerprint, never credentials. `kb-folder` and `media` aliases also bind a KB scope. Resolve their names with a KB reference, for example `ima resolve media "paper.pdf" --kb alias:research --json`. Reject account or KB scope mismatches instead of reusing the alias.
+
+Prefer generic references for repeat targets, for example `ima kb browse --kb alias:research`, `ima note get --note "name:Weekly Plan"`, and `ima kb add-note --kb alias:research --note "name:Weekly Plan"`. Existing positional IDs and `--kb-id`, `--note-id`, `--folder-id`, and `--media-id` remain pure-ID compatibility paths. All remote writes resolve every target before producing a side effect.
 
 ## Read Notes
 

@@ -40,6 +40,33 @@ def _pages(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _kb_target(parser: argparse.ArgumentParser, *, required: bool = True) -> None:
+    group = parser.add_mutually_exclusive_group(required=required)
+    group.add_argument("--kb-id", help="Knowledge-base ID from search-base or addable.")
+    group.add_argument(
+        "--kb", dest="kb_ref", metavar="KB_REF",
+        help="Knowledge-base reference using id:, alias:, or exact name: syntax.",
+    )
+
+
+def _folder_target(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--folder-id", help="Optional folder ID inside the knowledge base.")
+    group.add_argument(
+        "--folder", dest="folder_ref", metavar="FOLDER_REF",
+        help="Optional KB-folder reference using id:, alias:, or exact name: syntax.",
+    )
+
+
+def _media_target(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--media-id", help="Media identifier returned by kb browse or search.")
+    group.add_argument(
+        "--media", dest="media_ref", metavar="MEDIA_REF",
+        help="Media reference using id:, alias:, or exact name: syntax; name: requires a KB scope.",
+    )
+
+
 def add_kb_subcommands(subparsers: Any) -> None:
     search_base = _command(
         subparsers, "search-base", "Search knowledge bases.",
@@ -58,7 +85,7 @@ def add_kb_subcommands(subparsers: Any) -> None:
         'ima kb show-base --kb-id "kb_test" --json',
         "Cover URL query strings and fragments are removed from CLI output.",
     )
-    show.add_argument("--kb-id", required=True, help="Knowledge-base identifier from search-base or addable.")
+    _kb_target(show)
     _json(show)
 
     browse = _command(
@@ -66,8 +93,8 @@ def add_kb_subcommands(subparsers: Any) -> None:
         "Browse folders and knowledge items in one base; item results provide media_id values.",
         'ima kb browse --kb-id "kb_test" --all --max-pages 5 --json', _PAGING,
     )
-    browse.add_argument("--kb-id", required=True, help="Knowledge-base identifier from search-base or addable.")
-    browse.add_argument("--folder-id", help="Optional folder to browse; omit for the base root.")
+    _kb_target(browse)
+    _folder_target(browse)
     browse.add_argument("--cursor", default="", help="Opaque starting cursor from a previous response.")
     browse.add_argument("--limit", type=int, default=20, help="Items per page (default: 20; range: 1-50).")
     _pages(browse)
@@ -87,9 +114,13 @@ def add_kb_subcommands(subparsers: Any) -> None:
     search.add_argument("query", help="Content query sent independently to each selected knowledge base.")
     search_targets = search.add_mutually_exclusive_group(required=True)
     search_targets.add_argument("--kb-id", dest="kb_ids", action="append", metavar="KB_ID", help="Knowledge base ID; repeat for up to 20 bases.")
+    search_targets.add_argument(
+        "--kb", dest="kb_refs", action="append", metavar="KB_REF",
+        help="Knowledge-base reference; repeat for up to 20 bases.",
+    )
     search_targets.add_argument("--all-bases", action="store_true", help="Search across discovered knowledge bases.")
     search.add_argument("--max-bases", type=int, help="Maximum bases for --all-bases (default: 20; range: 1-100).")
-    search.add_argument("--cursor", default="", help="Base-specific cursor; valid only with exactly one --kb-id.")
+    search.add_argument("--cursor", default="", help="Base-specific cursor; valid only with exactly one --kb-id or --kb.")
     _pages(search)
     _json(search)
 
@@ -108,12 +139,16 @@ def add_kb_subcommands(subparsers: Any) -> None:
         "Add an existing IMA Note to one knowledge base.",
         'ima kb add-note --kb-id "kb_test" --note-id "note_test" --json', _WRITE,
     )
-    add_note.add_argument("--kb-id", required=True, help="Destination knowledge-base identifier from addable.")
+    _kb_target(add_note)
     ids = add_note.add_mutually_exclusive_group(required=True)
     ids.add_argument("--note-id", help="Canonical Note identifier from note search or list.")
+    ids.add_argument(
+        "--note", dest="note_ref", metavar="NOTE_REF",
+        help="Note reference using id:, alias:, or exact name: syntax.",
+    )
     ids.add_argument("--doc-id", dest="deprecated_doc_id", help="Deprecated alias for --note-id; retained for compatibility.")
     add_note.add_argument("--title", help="Optional title stored for this knowledge-base item.")
-    add_note.add_argument("--folder-id", help="Optional destination folder inside the knowledge base.")
+    _folder_target(add_note)
     _json(add_note)
 
     add_url = _command(
@@ -126,9 +161,9 @@ def add_kb_subcommands(subparsers: Any) -> None:
             "only failed items marked retryable. Videos and private/local network URLs are rejected."
         ),
     )
-    add_url.add_argument("--kb-id", required=True, help="Destination knowledge-base identifier from addable.")
+    _kb_target(add_url)
     add_url.add_argument("--url", dest="urls", action="append", required=True, help="Public HTTP(S) URL; repeat 1-10 times.")
-    add_url.add_argument("--folder-id", help="Optional destination folder inside the knowledge base.")
+    _folder_target(add_url)
     add_url.add_argument(
         "--on-conflict", choices=("error", "rename"), default="error",
         help="Downloaded-file name policy (default: error; rename chooses a unique name).",
@@ -154,9 +189,9 @@ def add_kb_subcommands(subparsers: Any) -> None:
             "Batch failures exit 9; retry only failed items marked retryable."
         ),
     )
-    add_file.add_argument("--kb-id", required=True, help="Destination knowledge-base identifier from addable.")
+    _kb_target(add_file)
     add_file.add_argument("--file", dest="files", action="append", required=True, help="Local file path; repeat 1-2000 times.")
-    add_file.add_argument("--folder-id", help="Optional destination folder inside the knowledge base.")
+    _folder_target(add_file)
     add_file.add_argument(
         "--content-type",
         help="MIME type override for one file only; cannot be used with repeated --file.",
@@ -177,7 +212,8 @@ def add_kb_subcommands(subparsers: Any) -> None:
         'ima kb media-info --media-id "media_test" --json',
         "Signed URLs and temporary headers are never printed.",
     )
-    info.add_argument("--media-id", required=True, help="Media identifier returned by kb browse or search.")
+    _media_target(info)
+    _kb_target(info, required=False)
     _json(info)
 
     read = _command(
@@ -186,7 +222,8 @@ def add_kb_subcommands(subparsers: Any) -> None:
         'ima kb read --media-id "media_test" --json',
         "This command is read-only and does not print signed source credentials.",
     )
-    read.add_argument("--media-id", required=True, help="Media identifier returned by kb browse or search.")
+    _media_target(read)
+    _kb_target(read, required=False)
     _json(read)
 
     export = _command(
@@ -195,7 +232,8 @@ def add_kb_subcommands(subparsers: Any) -> None:
         'ima kb export --media-id "media_test" --output ".\\original.bin" --json',
         "The destination is not overwritten unless --force is supplied.",
     )
-    export.add_argument("--media-id", required=True, help="Media identifier returned by kb browse or search.")
+    _media_target(export)
+    _kb_target(export, required=False)
     export.add_argument("--output", required=True, help="Local output file; its parent directory must already exist.")
     export.add_argument("--force", action="store_true", help="Atomically replace an existing regular output file.")
     _json(export)

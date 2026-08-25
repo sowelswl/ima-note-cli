@@ -102,8 +102,8 @@ class RepositoryDocsTests(unittest.TestCase):
                         self.assertIsInstance(action.help, str, f"{command}: {action.dest}")
                         self.assertTrue(action.help.strip(), f"{command}: {action.dest}")
                         self.assertNotEqual(action.help, argparse.SUPPRESS, f"{command}: {action.dest}")
-        self.assertEqual(len(leaves), 18)
-        self.assertEqual(len(arguments), 88)
+        self.assertEqual(len(leaves), 22)
+        self.assertEqual(len(arguments), 127)
         contracts = {
             "ima": ("IMA_OPENAPI_APIKEY", "exit 9", "exit 75"),
             "ima note create": ("Remote write", "UTF-8", "knowledge-base upload"),
@@ -112,6 +112,8 @@ class RepositoryDocsTests(unittest.TestCase):
             "ima kb add-file": ("1-2000", "video is unsupported"),
             "ima kb read": ("4 MiB", "kb export"),
             "ima kb export": ("not overwritten", "--force"),
+            "ima resolve": ("exact name", "id:", "alias:", "name:"),
+            "ima alias set": ("configured account", "kb.research", "--force"),
         }
         for command, phrases in contracts.items():
             for phrase in phrases:
