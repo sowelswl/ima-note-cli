@@ -131,6 +131,8 @@ ima note append "note_id" --file update.md
 
 `note_id` 是 canonical identifier。`ima kb add-note --doc-id` 与 JSON `doc_id` 只是 deprecated compatibility，正式用法是 `--note-id`/`note_id`。
 
+真实服务可能省略 `ima note list` 的 `next_cursor`。响应字段确实缺失、本页非空且请求 cursor 为空或 canonical decimal 时，CLI 会按本页实际返回条数合成下一偏移，让 `--all` 无需手工复制 cursor；这是兼容 fallback，不替代服务端未来可能返回的显式 cursor。
+
 Knowledge：
 
 ```bash

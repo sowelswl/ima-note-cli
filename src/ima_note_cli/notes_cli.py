@@ -81,7 +81,10 @@ def add_note_subcommands(subparsers: Any) -> None:
         "--folder", dest="folder_ref", metavar="FOLDER_REF",
         help="Note-folder reference using id:, alias:, or exact name: syntax.",
     )
-    listing.add_argument("--cursor", default="", help="Opaque starting cursor from a previous response.")
+    listing.add_argument(
+        "--cursor", default="",
+        help="Starting cursor. When the server omits next_cursor, an empty or canonical decimal cursor can advance by the returned item count.",
+    )
     listing.add_argument(
         "--sort", choices=("updated", "created", "title", "size"), default="updated",
         help="Result order (default: updated); size is reserved but currently unsupported.",

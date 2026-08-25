@@ -713,7 +713,9 @@ options:
                         Folder ID to list; omit for the root Notes view.
   --folder FOLDER_REF   Note-folder reference using id:, alias:, or exact
                         name: syntax.
-  --cursor CURSOR       Opaque starting cursor from a previous response.
+  --cursor CURSOR       Starting cursor. When the server omits next_cursor, an
+                        empty or canonical decimal cursor can advance by the
+                        returned item count.
   --sort {updated,created,title,size}
                         Result order (default: updated); size is reserved but
                         currently unsupported.

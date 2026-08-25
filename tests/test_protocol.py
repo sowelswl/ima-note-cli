@@ -4,7 +4,7 @@ import unittest
 
 from tests._bootstrap import ROOT  # noqa: F401
 from ima_note_cli.errors import ApiProtocolError
-from ima_note_cli.protocol import require_array, require_bool, require_int, require_non_empty_string, require_string_map
+from ima_note_cli.protocol import optional_int64, require_array, require_bool, require_int, require_int64, require_non_empty_string, require_string_map
 
 
 class ProtocolTests(unittest.TestCase):
@@ -23,3 +23,21 @@ class ProtocolTests(unittest.TestCase):
                 require_string_map({"headers": value}, "headers", "ep")
             self.assertNotIn("secret", str(caught.exception))
 
+    def test_int64_wire_forms_are_bounded_and_canonical(self) -> None:
+        minimum, maximum = -(1 << 63), (1 << 63) - 1
+        for value, expected in (
+            (minimum, minimum), (str(minimum), minimum), (0, 0), ("0", 0),
+            (maximum, maximum), (str(maximum), maximum),
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(require_int64({"value": value}, "value", "ep"), expected)
+        self.assertIsNone(optional_int64({"value": None}, "value", "ep"))
+
+        invalid = (
+            True, "-0", "01", minimum - 1, str(minimum - 1),
+            maximum + 1, str(maximum + 1), "9" * 5000,
+        )
+        for value in invalid:
+            with self.subTest(value_type=type(value).__name__, value_length=len(value) if isinstance(value, str) else None):
+                with self.assertRaises(ApiProtocolError):
+                    require_int64({"value": value}, "value", "ep")

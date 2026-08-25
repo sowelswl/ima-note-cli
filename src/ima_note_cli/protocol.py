@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -8,6 +9,9 @@ from .security import sanitize_header_map
 
 
 _MISSING = object()
+_INT64_MIN = -(1 << 63)
+_INT64_MAX = (1 << 63) - 1
+_CANONICAL_DECIMAL = re.compile(r"(?:0|[1-9][0-9]*|-[1-9][0-9]*)\Z")
 
 
 def _failure(endpoint: str, path: str, expected: str) -> ApiProtocolError:
@@ -99,6 +103,40 @@ def optional_int(obj: Mapping[str, Any], key: str, endpoint: str, path: str = "d
     return value
 
 
+def require_int64(obj: Mapping[str, Any], key: str, endpoint: str, path: str = "data") -> int:
+    value = _value(obj, key, endpoint, path)
+    parsed = _parse_int64(value)
+    if parsed is None:
+        raise _failure(endpoint, f"{path}.{key}", "an int64 integer or canonical decimal string")
+    return parsed
+
+
+def optional_int64(obj: Mapping[str, Any], key: str, endpoint: str, path: str = "data") -> int | None:
+    value = obj.get(key)
+    if value is None:
+        return None
+    parsed = _parse_int64(value)
+    if parsed is None:
+        raise _failure(endpoint, f"{path}.{key}", "an int64 integer, canonical decimal string, or null")
+    return parsed
+
+
+def _parse_int64(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        parsed = value
+    elif (
+        isinstance(value, str)
+        and len(value.removeprefix("-")) <= 19
+        and _CANONICAL_DECIMAL.fullmatch(value)
+    ):
+        parsed = int(value)
+    else:
+        return None
+    return parsed if _INT64_MIN <= parsed <= _INT64_MAX else None
+
+
 def require_bool(obj: Mapping[str, Any], key: str, endpoint: str, path: str = "data") -> bool:
     value = _value(obj, key, endpoint, path)
     if not isinstance(value, bool):
@@ -114,4 +152,3 @@ def require_string_map(obj: Mapping[str, Any], key: str, endpoint: str, path: st
         return sanitize_header_map(value)
     except ValueError as exc:
         raise _failure(endpoint, f"{path}.{key}", "safe HTTP string headers") from exc
-

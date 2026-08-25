@@ -7,7 +7,7 @@ from .config import Credentials
 from .errors import ApiProtocolError, InputError
 from .http import ImaApiClient
 from .notes_content import ensure_valid_utf8
-from .protocol import optional_int, optional_object, optional_string, require_array, require_bool, require_identifier, require_int, require_string
+from .protocol import optional_int, optional_int64, optional_object, optional_string, require_array, require_bool, require_identifier, require_int64, require_string
 
 
 BASE_URL = "https://ima.qq.com/openapi/note/v1"
@@ -128,7 +128,7 @@ class NotesApiClient(ImaApiClient):
         infos = require_array(data, "search_note_infos", "search_note")
         return {
             "docs": [self._parse_search_note(item) for item in infos],
-            "total_hit_num": require_int(data, "total_hit_num", "search_note"),
+            "total_hit_num": require_int64(data, "total_hit_num", "search_note"),
             "is_end": require_bool(data, "is_end", "search_note"),
             "start": start,
             "end": start + limit,
@@ -185,11 +185,17 @@ class NotesApiClient(ImaApiClient):
             "list_note",
             {"folder_id": folder_id, "sort_type": sort_type, "cursor": cursor, "limit": limit},
         )
-        notes = require_array(data, "note_book_list", "list_note")
+        raw_notes = require_array(data, "note_book_list", "list_note")
+        notes = [self._parse_note_info(item, endpoint="list_note") for item in raw_notes]
+        is_end = require_bool(data, "is_end", "list_note")
+        next_cursor_present = "next_cursor" in data
+        next_cursor = optional_string(data, "next_cursor", "list_note")
+        if not next_cursor_present and not is_end:
+            next_cursor = _advance_list_note_cursor(cursor, len(notes))
         return {
-            "notes": [self._parse_note_info(item, endpoint="list_note") for item in notes],
-            "next_cursor": optional_string(data, "next_cursor", "list_note"),
-            "is_end": require_bool(data, "is_end", "list_note"),
+            "notes": notes,
+            "next_cursor": next_cursor,
+            "is_end": is_end,
             "folder_id": folder_id,
             "sort_type": sort_type,
         }
@@ -244,8 +250,8 @@ class NotesApiClient(ImaApiClient):
             summary=optional_string(item, "summary", endpoint, "data.note"),
             folder_id=optional_string(ext, "folder_id", endpoint, "data.note.note_ext_info"),
             folder_name=optional_string(ext, "folder_name", endpoint, "data.note.note_ext_info"),
-            create_time=optional_int(item, "create_time", endpoint, "data.note"),
-            modify_time=optional_int(item, "modify_time", endpoint, "data.note"),
+            create_time=optional_int64(item, "create_time", endpoint, "data.note"),
+            modify_time=optional_int64(item, "modify_time", endpoint, "data.note"),
             cover_image=optional_string(item, "cover_image", endpoint, "data.note"),
             highlight_title="",
         )
@@ -258,9 +264,9 @@ class NotesApiClient(ImaApiClient):
         return FolderResult(
             folder_id=folder_id,
             name=optional_string(item, "name", "list_notebook", "data.note_folder_infos"),
-            note_number=optional_int(item, "note_number", "list_notebook", "data.note_folder_infos"),
-            create_time=optional_int(item, "create_time", "list_notebook", "data.note_folder_infos"),
-            modify_time=optional_int(item, "modify_time", "list_notebook", "data.note_folder_infos"),
+            note_number=optional_int64(item, "note_number", "list_notebook", "data.note_folder_infos"),
+            create_time=optional_int64(item, "create_time", "list_notebook", "data.note_folder_infos"),
+            modify_time=optional_int64(item, "modify_time", "list_notebook", "data.note_folder_infos"),
             folder_type=optional_int(item, "folder_type", "list_notebook", "data.note_folder_infos"),
             parent_folder_id=optional_string(item, "parent_folder_id", "list_notebook", "data.note_folder_infos"),
         )
@@ -268,3 +274,18 @@ class NotesApiClient(ImaApiClient):
     @staticmethod
     def _response_note_id(data: dict[str, Any], endpoint: str) -> str:
         return require_identifier(data, "note_id", endpoint)
+
+
+def _advance_list_note_cursor(cursor: str, item_count: int) -> str:
+    if item_count < 1:
+        return ""
+    if cursor == "":
+        return str(item_count)
+    if (
+        len(cursor) > 19
+        or not cursor.isascii()
+        or not cursor.isdecimal()
+        or (len(cursor) > 1 and cursor.startswith("0"))
+    ):
+        return ""
+    return str(int(cursor) + item_count)

@@ -21,6 +21,8 @@ IMA 请求仅发送到官方 `https://ima.qq.com`。接口使用 POST JSON，响
 
 `note_id` 是模型、payload 和 CLI 的 canonical ID。兼容期内，`SearchResult.doc_id` 是只读别名，成功 JSON 可包含相等的 `note_id`/`doc_id`，`ima kb add-note --doc-id` 是 `--note-id` 的弃用别名。两者冲突时失败，不猜测旧响应树。
 
+Notes 文档声明为 `int64` 的响应字段允许 JSON integer 或 canonical decimal string 两种 wire form，并统一规范化为 Python integer；布尔、非规范数字字符串和 int64 越界值仍失败。受保护的真实 smoke 已观察到 `list_note` 在 `is_end=false` 时省略 `next_cursor`，且当前服务在三种已支持排序下接受十进制偏移量。仅当响应字段确实缺失、请求 cursor 为空或 canonical decimal、且本页非空时，CLI 才以“当前偏移 + 本页实际条数”作为兼容 fallback；显式 null/空 cursor、非十进制或超长输入不会被猜测。该 fallback 是实测兼容行为，不是上游文档承诺的通用 opaque-cursor 语义。
+
 写入前严格验证 UTF-8。Markdown/HTML 图片只保留 HTTP(S) 引用；本地路径、data URI 与其他 scheme 被移除并报告，过滤后空内容失败。
 
 ## Knowledge 十一个工作流与核心接口
@@ -55,7 +57,7 @@ CLI 跨库搜索是对单库 `search_knowledge` 的本地编排，不是新的�
 
 ## 分页、JSON 与退出语义
 
-单页是默认行为。支持的 list/search 命令用 `--all --max-pages N` 做有界 cursor/offset 分页；重复 cursor 或页数上限产生 partial，而不是无限循环。真实 `search_knowledge` 在单页响应中可能同时省略 `next_cursor` 与 `is_end`，此时按已完成单页处理；若只提供其中一个字段，仍视为协议错误。JSON 成功和失败均为单个 stdout 文档，非 ASCII 字符使用标准 JSON Unicode 转义以消除终端编码依赖，解析后内容不变；失败时 stderr 为空。退出码为：0 成功，2 输入，3 配置，4 非临时网络，5 业务/认证，6 协议，7 原文/本地 I/O，8 上传，9 partial/itemized failure，70 内部错误，75 临时故障，130 中断。`retryable=true` 的单项错误使用 75；批处理可将其聚合为整体退出码 9。
+单页是默认行为。支持的 list/search 命令用 `--all --max-pages N` 做有界 cursor/offset 分页；重复 cursor 或页数上限产生 partial，而不是无限循环。`list_note` 的缺失 cursor 按上节规则合成。真实 `search_knowledge` 在单页响应中可能同时省略 `next_cursor` 与 `is_end`，此时按已完成单页处理；若只提供其中一个字段，仍视为协议错误。JSON 成功和失败均为单个 stdout 文档，非 ASCII 字符使用标准 JSON Unicode 转义以消除终端编码依赖，解析后内容不变；失败时 stderr 为空。退出码为：0 成功，2 输入，3 配置，4 非临时网络，5 业务/认证，6 协议，7 原文/本地 I/O，8 上传，9 partial/itemized failure，70 内部错误，75 临时故障，130 中断。`retryable=true` 的单项错误使用 75；批处理可将其聚合为整体退出码 9。
 
 ## Fixtures 与来源
 
@@ -70,7 +72,7 @@ Fixtures 均为离线、脱敏、合成数据，不得替换为真实账户响�
 
 ## 待受保护只读 smoke 验证
 
-- `list_note` 是否始终返回 `next_cursor`，以及 `list_notebook` 增量版本语义；
+- `list_note` offset fallback 在其他账号、后端版本和并发列表变更时的稳定性，以及 `list_notebook` 增量版本语义；
 - 实际媒体 URL host、Content-Type/Length、临时 headers 与重定向行为；
 - 笔记媒体分支是否可能同时返回 `url_info`；
 - URL 根目录 `folder_id` 和服务端错误码文档歧义。

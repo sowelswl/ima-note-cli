@@ -80,6 +80,82 @@ class NotesApiContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             client.list_notes(1, folder_id="0")
 
+    def test_list_notes_synthesizes_missing_offset_cursor_without_overriding_server_cursor(self):
+        data = load_data("notes/list_note_success.json")
+        data["is_end"] = False
+        first = RecordingNotesClient({"list_note": data}).list_notes(1)
+        self.assertEqual(first["next_cursor"], "1")
+
+        later = RecordingNotesClient({"list_note": data}).list_notes(1, cursor="3")
+        self.assertEqual(later["next_cursor"], "4")
+
+        data["next_cursor"] = "server_cursor"
+        explicit = RecordingNotesClient({"list_note": data}).list_notes(1, cursor="3")
+        self.assertEqual(explicit["next_cursor"], "server_cursor")
+
+        data["next_cursor"] = ""
+        explicit_empty = RecordingNotesClient({"list_note": data}).list_notes(1, cursor="3")
+        self.assertEqual(explicit_empty["next_cursor"], "")
+
+        data["next_cursor"] = None
+        explicit_null = RecordingNotesClient({"list_note": data}).list_notes(1, cursor="3")
+        self.assertEqual(explicit_null["next_cursor"], "")
+
+        del data["next_cursor"]
+        for cursor in ("opaque", "03", "٣", "9" * 5000):
+            with self.subTest(cursor_length=len(cursor)):
+                refused = RecordingNotesClient({"list_note": data}).list_notes(1, cursor=cursor)
+                self.assertEqual(refused["next_cursor"], "")
+
+        data["note_book_list"] = []
+        empty_page = RecordingNotesClient({"list_note": data}).list_notes(1, cursor="3")
+        self.assertEqual(empty_page["next_cursor"], "")
+
+    def test_note_int64_fields_accept_decimal_string_wire_values(self):
+        search_data = load_data("notes/search_note_success.json")
+        search_info = search_data["search_note_infos"][0]["note_book_info"]
+        search_data["total_hit_num"] = "1"
+        search_info["create_time"] = "1700000000000"
+        search_info["modify_time"] = "1700000100000"
+        search_result = RecordingNotesClient({"search_note": search_data}).search_notes("项目", 1)
+        self.assertEqual(search_result["total_hit_num"], 1)
+        self.assertEqual(search_result["docs"][0].create_time, 1700000000000)
+        self.assertEqual(search_result["docs"][0].modify_time, 1700000100000)
+
+        folder_data = load_data("notes/list_notebook_success.json")
+        folder_info = folder_data["note_folder_infos"][0]
+        folder_info["note_number"] = "2"
+        folder_info["create_time"] = "1700000000000"
+        folder_info["modify_time"] = "1700000100000"
+        folder = RecordingNotesClient({"list_notebook": folder_data}).list_folders(1)["folders"][0]
+        self.assertEqual(folder.note_number, 2)
+        self.assertEqual(folder.create_time, 1700000000000)
+        self.assertEqual(folder.modify_time, 1700000100000)
+
+        note_data = load_data("notes/list_note_success.json")
+        note_info = note_data["note_book_list"][0]
+        note_info["create_time"] = "1700000000000"
+        note_info["modify_time"] = "1700000100000"
+        note = RecordingNotesClient({"list_note": note_data}).list_notes(1)["notes"][0]
+        self.assertEqual(note.create_time, 1700000000000)
+        self.assertEqual(note.modify_time, 1700000100000)
+
+    def test_note_int64_fields_reject_noncanonical_or_out_of_range_values(self):
+        search_data = load_data("notes/search_note_success.json")
+        search_data["total_hit_num"] = "01"
+        with self.assertRaisesRegex(ApiError, "total_hit_num"):
+            RecordingNotesClient({"search_note": search_data}).search_notes("项目", 1)
+
+        note_data = load_data("notes/list_note_success.json")
+        note_data["note_book_list"][0]["create_time"] = True
+        with self.assertRaisesRegex(ApiError, "create_time"):
+            RecordingNotesClient({"list_note": note_data}).list_notes(1)
+
+        folder_data = load_data("notes/list_notebook_success.json")
+        folder_data["note_folder_infos"][0]["note_number"] = str(1 << 63)
+        with self.assertRaisesRegex(ApiError, "note_number"):
+            RecordingNotesClient({"list_notebook": folder_data}).list_folders(1)
+
     def test_get_create_and_append_use_note_id_and_dual_output(self):
         client = RecordingNotesClient({
             "get_doc_content": load_data("notes/get_doc_content_success.json"),
