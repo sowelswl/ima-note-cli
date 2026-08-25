@@ -1,4 +1,4 @@
 interface:
   display_name: "IMA Note CLI"
-  short_description: "Install and safely operate the IMA Notes and Knowledge CLI"
-  default_prompt: "Use $ima-note-cli to configure and run a safe IMA CLI workflow."
+  short_description: "Safely resolve and operate IMA Notes and Knowledge"
+  default_prompt: "Use $ima-note-cli to resolve resources safely and run the requested IMA Notes or Knowledge workflow."
